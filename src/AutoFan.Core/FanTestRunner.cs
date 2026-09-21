@@ -282,10 +282,13 @@ public sealed class FanTestRunner
         CancellationToken cancellationToken)
     {
         int currentDuty = group.DutyCyclePercent ?? 40;
-        IReadOnlyList<int> targets = DutiesAbove(currentDuty, duties, testedDuties, group.Id);
+        IReadOnlyList<int> targets = FanTestSchedule.AbsoluteDuties(
+            duties,
+            currentDuty,
+            testedDuties.GetValueOrDefault(group.Id));
         if (targets.Count == 0)
         {
-            if (captureReference)
+            if (captureReference && FanTestSchedule.IsAlreadyAtMax(currentDuty, targets))
             {
                 unknown.AddRange(InfluenceMapBuilder.UnknownForGroup(
                     group.Id,
@@ -393,30 +396,6 @@ public sealed class FanTestRunner
             cancellationToken).ConfigureAwait(false);
         MarkDuty(testedDuties, group.Id, duty);
         return sampled;
-    }
-
-    private static IReadOnlyList<int> DutiesAbove(
-        int currentDuty,
-        IReadOnlyList<int> duties,
-        Dictionary<string, HashSet<int>> testedDuties,
-        string groupId)
-    {
-        HashSet<int> seen = testedDuties.GetValueOrDefault(groupId) ?? [];
-        var targets = new List<int>();
-        foreach (int duty in duties.OrderBy(static value => value))
-        {
-            if (duty <= currentDuty
-                || duty > SafetyLimits.MaxDutyPercent
-                || seen.Contains(duty)
-                || targets.Contains(duty))
-            {
-                continue;
-            }
-
-            targets.Add(duty);
-        }
-
-        return targets;
     }
 
     private static void MarkDuty(Dictionary<string, HashSet<int>> testedDuties, string groupId, int duty)
