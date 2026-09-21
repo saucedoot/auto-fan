@@ -242,8 +242,20 @@ public sealed class FakeHardwareBackend : IHardwareBackend
         return groups;
     }
 
-    private static double ComputeRpm(FanState fan) =>
-        fan.RespondsToDuty ? fan.MaxRpm * fan.Duty / 100.0 : 0;
+    private static double ComputeRpm(FanState fan)
+    {
+        if (!fan.RespondsToDuty)
+        {
+            return 0;
+        }
+
+        if (fan.StallAtOrBelowDuty is int stall && fan.Duty <= stall)
+        {
+            return 0;
+        }
+
+        return fan.MaxRpm * fan.Duty / 100.0;
+    }
 
     private sealed record FanState(
         string Name,
@@ -252,7 +264,8 @@ public sealed class FakeHardwareBackend : IHardwareBackend
         FanGroupKind Kind = FanGroupKind.Fan,
         bool IsGpu = false,
         bool RespondsToDuty = true,
-        string? ControllerName = null);
+        string? ControllerName = null,
+        int? StallAtOrBelowDuty = null);
 
     public void AddFan(
         string id,
@@ -268,5 +281,16 @@ public sealed class FakeHardwareBackend : IHardwareBackend
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         _fans[id] = new FanState(name, duty, maxRpm, kind, isGpu, respondsToDuty, controllerName);
         _originalDuties[id] = duty;
+    }
+
+    public void SetStallAtOrBelow(string fanGroupId, int duty)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(fanGroupId);
+        if (!_fans.TryGetValue(fanGroupId, out FanState? fan) || fan is null)
+        {
+            throw new ArgumentException($"Unknown fan group '{fanGroupId}'.", nameof(fanGroupId));
+        }
+
+        _fans[fanGroupId] = fan with { StallAtOrBelowDuty = duty };
     }
 }
