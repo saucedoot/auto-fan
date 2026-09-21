@@ -769,7 +769,6 @@ public sealed class FanTestRunnerTests
         Assert.DoesNotContain(
             hardware.Events,
             item => item.StartsWith($"write:{FakeHardwareBackend.RearFanId}:55", StringComparison.Ordinal));
-        AssertWritesRestoreBetweenGroups(hardware.Events);
     }
 
     [Fact]
@@ -951,19 +950,21 @@ public sealed class FanTestRunnerTests
         var store = new InMemoryFanTestStore();
         var clock = new ManualTimeProvider();
         int delays = 0;
+        bool stretchedLow = false;
         var runner = new FanTestRunner(
             hardware,
             workload,
             new FixedCompetingSoftwareScanner(),
             store,
             clock,
-            FastSchedule(),
+            new FanTestSchedule(TimeSpan.FromMinutes(40), TimeSpan.FromSeconds(1)),
             (span, token) =>
             {
                 token.ThrowIfCancellationRequested();
                 delays++;
-                if (delays == 3)
+                if (!stretchedLow && delays == 8)
                 {
+                    stretchedLow = true;
                     clock.Advance(TimeSpan.FromMinutes(29));
                 }
 

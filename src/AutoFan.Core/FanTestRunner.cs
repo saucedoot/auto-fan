@@ -782,6 +782,8 @@ public sealed class FanTestRunner
 
         return ReferenceStability.WithoutUnusableTargets(gated, _stability);
     }
+
+    private IReadOnlyList<InfluenceEntry> ApplyGates(IReadOnlyList<InfluenceEntry> entries)
     {
         IReadOnlyList<InfluenceEntry> gated = entries;
         if (!_gpuHeatUseful)
