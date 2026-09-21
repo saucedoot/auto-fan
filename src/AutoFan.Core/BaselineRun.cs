@@ -9,4 +9,6 @@ public sealed record BaselineRun(
     double? AmbientCelsius,
     bool GpuLoadAvailable,
     IReadOnlyList<BaselineSample> Samples,
-    IReadOnlyList<BaselineMetric> Metrics);
+    IReadOnlyList<BaselineMetric> Metrics,
+    HeatProfile? EverydayProfile = null,
+    HeatProfile? LowProfile = null);

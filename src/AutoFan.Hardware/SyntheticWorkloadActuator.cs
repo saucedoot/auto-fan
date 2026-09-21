@@ -7,6 +7,7 @@ public sealed class SyntheticWorkloadActuator : IWorkloadActuator
     private readonly CpuWorkload _cpu = new();
     private readonly object _gate = new();
     private GpuWorkload? _gpu;
+    private HeatProfile? _lockedEveryday;
     private HeatProfile? _lockedLow;
     private WorkloadLevel _level = WorkloadLevel.Idle;
     private bool _disposed;
@@ -18,6 +19,17 @@ public sealed class SyntheticWorkloadActuator : IWorkloadActuator
     }
 
     public bool GpuLoadAvailable { get; private set; }
+
+    public HeatProfile? LockedEveryday
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _lockedEveryday;
+            }
+        }
+    }
 
     public HeatProfile? LockedLow
     {
@@ -62,9 +74,19 @@ public sealed class SyntheticWorkloadActuator : IWorkloadActuator
         lock (_gate)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
+            if (level == WorkloadLevel.Everyday)
+            {
+                _lockedEveryday = HeatProfile.Everyday;
+            }
+
             if (level == WorkloadLevel.Low)
             {
-                ApplyLowLocked(_lockedLow ?? HeatProfile.DefaultLow);
+                if (_lockedLow is null)
+                {
+                    throw new InvalidOperationException(HeatProfile.MissingLampDetail);
+                }
+
+                ApplyLowLocked(_lockedLow);
                 return;
             }
 

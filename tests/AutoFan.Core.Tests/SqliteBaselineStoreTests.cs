@@ -1,6 +1,7 @@
 using AutoFan.Core;
 using AutoFan.Hardware;
 using AutoFan.Storage;
+using Microsoft.Data.Sqlite;
 
 namespace AutoFan.Core.Tests;
 
@@ -38,6 +39,81 @@ public sealed class SqliteBaselineStoreTests
 
             Assert.NotNull(loaded);
             AssertEqualRuns(original, loaded);
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [Fact]
+    public void Memory_round_trip_keeps_everyday_and_calibrated_low_heat_profiles()
+    {
+        using var store = new SqliteBaselineStore("Data Source=:memory:");
+        HeatProfile low = new(HeatProfile.EverydayCpuWorkers, 2560, 1440, 1, 48);
+        Assert.NotEqual(HeatProfile.DefaultLow, low);
+        BaselineRun original = SampleRun(ambient: 21.0, evidence: MetricEvidence.Measured) with
+        {
+            EverydayProfile = HeatProfile.Everyday,
+            LowProfile = low,
+        };
+
+        store.Save(original);
+        BaselineRun? loaded = store.GetLatest();
+
+        Assert.NotNull(loaded);
+        AssertEqualRuns(original, loaded);
+        Assert.Equal(HeatProfile.Everyday, loaded.EverydayProfile);
+        Assert.Equal(low, loaded.LowProfile);
+        Assert.NotEqual(HeatProfile.DefaultLow, loaded.LowProfile);
+    }
+
+    [Fact]
+    public void Old_row_without_heat_columns_loads_null_profiles_not_default_low()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"autofan-baseline-old-{Guid.NewGuid():N}.db");
+        try
+        {
+            string connection = $"Data Source={path};Pooling=False";
+            using (var raw = new SqliteConnection(connection))
+            {
+                raw.Open();
+                using var command = raw.CreateCommand();
+                command.CommandText =
+                    """
+                    CREATE TABLE baseline_run (
+                        id TEXT PRIMARY KEY,
+                        started_utc TEXT NOT NULL,
+                        finished_utc TEXT NOT NULL,
+                        status TEXT NOT NULL,
+                        abort_detail TEXT,
+                        ambient_celsius REAL,
+                        gpu_load_available INTEGER NOT NULL
+                    );
+                    INSERT INTO baseline_run (
+                        id, started_utc, finished_utc, status, abort_detail, ambient_celsius, gpu_load_available)
+                    VALUES (
+                        'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+                        '2026-09-19T16:00:00.0000000+00:00',
+                        '2026-09-19T16:05:00.0000000+00:00',
+                        'Completed',
+                        NULL,
+                        NULL,
+                        1);
+                    """;
+                command.ExecuteNonQuery();
+            }
+
+            using var store = new SqliteBaselineStore(connection);
+            BaselineRun? loaded = store.GetLatest();
+
+            Assert.NotNull(loaded);
+            Assert.Null(loaded.EverydayProfile);
+            Assert.Null(loaded.LowProfile);
+            Assert.NotEqual(HeatProfile.DefaultLow, loaded.LowProfile);
         }
         finally
         {
@@ -108,5 +184,7 @@ public sealed class SqliteBaselineStoreTests
         Assert.Equal(expected.Metrics.Count, actual.Metrics.Count);
         Assert.Equal(expected.Metrics[0].Evidence, actual.Metrics[0].Evidence);
         Assert.Equal(expected.Metrics[0].Value, actual.Metrics[0].Value);
+        Assert.Equal(expected.EverydayProfile, actual.EverydayProfile);
+        Assert.Equal(expected.LowProfile, actual.LowProfile);
     }
 }

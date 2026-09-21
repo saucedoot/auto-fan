@@ -47,8 +47,9 @@ public sealed class SqliteBaselineStore : IBaselineStore, IDisposable
                 command.CommandText =
                     """
                     INSERT INTO baseline_run (
-                        id, started_utc, finished_utc, status, abort_detail, ambient_celsius, gpu_load_available)
-                    VALUES ($id, $started, $finished, $status, $abort, $ambient, $gpu);
+                        id, started_utc, finished_utc, status, abort_detail, ambient_celsius, gpu_load_available,
+                        everyday_heat_json, low_heat_json)
+                    VALUES ($id, $started, $finished, $status, $abort, $ambient, $gpu, $everyday, $low);
                     """;
                 command.Parameters.AddWithValue("$id", run.Id.ToString("D"));
                 command.Parameters.AddWithValue("$started", run.StartedAt.ToString("O"));
@@ -57,6 +58,8 @@ public sealed class SqliteBaselineStore : IBaselineStore, IDisposable
                 command.Parameters.AddWithValue("$abort", (object?)run.AbortDetail ?? DBNull.Value);
                 command.Parameters.AddWithValue("$ambient", (object?)run.AmbientCelsius ?? DBNull.Value);
                 command.Parameters.AddWithValue("$gpu", run.GpuLoadAvailable ? 1 : 0);
+                command.Parameters.AddWithValue("$everyday", ToHeatJson(run.EverydayProfile));
+                command.Parameters.AddWithValue("$low", ToHeatJson(run.LowProfile));
                 command.ExecuteNonQuery();
             }
 
@@ -146,7 +149,9 @@ public sealed class SqliteBaselineStore : IBaselineStore, IDisposable
                 status TEXT NOT NULL,
                 abort_detail TEXT,
                 ambient_celsius REAL,
-                gpu_load_available INTEGER NOT NULL
+                gpu_load_available INTEGER NOT NULL,
+                everyday_heat_json TEXT,
+                low_heat_json TEXT
             );
             CREATE TABLE IF NOT EXISTS baseline_sample (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -167,6 +172,28 @@ public sealed class SqliteBaselineStore : IBaselineStore, IDisposable
             );
             """;
         command.ExecuteNonQuery();
+        EnsureColumn("baseline_run", "everyday_heat_json", "TEXT");
+        EnsureColumn("baseline_run", "low_heat_json", "TEXT");
+    }
+
+    private void EnsureColumn(string table, string column, string sqlType)
+    {
+        using (var inspect = _connection.CreateCommand())
+        {
+            inspect.CommandText = $"PRAGMA table_info({table});";
+            using SqliteDataReader reader = inspect.ExecuteReader();
+            while (reader.Read())
+            {
+                if (string.Equals(reader.GetString(1), column, StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+            }
+        }
+
+        using var alter = _connection.CreateCommand();
+        alter.CommandText = $"ALTER TABLE {table} ADD COLUMN {column} {sqlType};";
+        alter.ExecuteNonQuery();
     }
 
     private BaselineRun Load(Guid id)
@@ -175,7 +202,8 @@ public sealed class SqliteBaselineStore : IBaselineStore, IDisposable
         using var runCommand = _connection.CreateCommand();
         runCommand.CommandText =
             """
-            SELECT started_utc, finished_utc, status, abort_detail, ambient_celsius, gpu_load_available
+            SELECT started_utc, finished_utc, status, abort_detail, ambient_celsius, gpu_load_available,
+                   everyday_heat_json, low_heat_json
             FROM baseline_run WHERE id = $id;
             """;
         runCommand.Parameters.AddWithValue("$id", idText);
@@ -191,6 +219,8 @@ public sealed class SqliteBaselineStore : IBaselineStore, IDisposable
         string? abort = runReader.IsDBNull(3) ? null : runReader.GetString(3);
         double? ambient = runReader.IsDBNull(4) ? null : runReader.GetDouble(4);
         bool gpu = runReader.GetInt32(5) != 0;
+        HeatProfile? everyday = ReadHeat(runReader, 6);
+        HeatProfile? low = ReadHeat(runReader, 7);
         runReader.Close();
 
         var samples = new List<BaselineSample>();
@@ -237,7 +267,38 @@ public sealed class SqliteBaselineStore : IBaselineStore, IDisposable
             }
         }
 
-        return new BaselineRun(id, started, finished, status, abort, ambient, gpu, samples, metrics);
+        return new BaselineRun(
+            id,
+            started,
+            finished,
+            status,
+            abort,
+            ambient,
+            gpu,
+            samples,
+            metrics,
+            everyday,
+            low);
+    }
+
+    private static object ToHeatJson(HeatProfile? profile) =>
+        profile is null ? DBNull.Value : JsonSerializer.Serialize(profile, JsonOptions);
+
+    private static HeatProfile? ReadHeat(SqliteDataReader reader, int ordinal)
+    {
+        if (reader.IsDBNull(ordinal))
+        {
+            return null;
+        }
+
+        string json = reader.GetString(ordinal);
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return null;
+        }
+
+        return JsonSerializer.Deserialize<HeatProfile>(json, JsonOptions)
+            ?? throw new InvalidOperationException("A stored heat profile could not be read.");
     }
 
     private static DateTimeOffset ParseTime(string value) =>

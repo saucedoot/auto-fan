@@ -11,6 +11,9 @@ public sealed record HeatProfile(
     int GpuPasses,
     int GpuIterations)
 {
+    public const string MissingLampDetail =
+        "Need a finished Watch so fan tests can reuse that exact heat. Run Watch first.";
+
     public static int EverydayCpuWorkers { get; } = Math.Max(1, Environment.ProcessorCount / 4);
 
     public static HeatProfile Idle { get; } = new(0, 0, 0, 0, 0);
