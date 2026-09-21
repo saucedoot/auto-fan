@@ -41,7 +41,7 @@ The app performs controlled testing, learns the thermal behavior of the system, 
 
 A **Quiet ↔ Cool** slider helps set the initial balance, but it becomes secondary once the curves are visible — users who want manual control can tweak the curves directly.
 
-The user does not need to understand airflow theory or spend hours testing by hand. If they cancel mid-test, they still get whatever the software has already learned — a partial map and a conservative policy — not a blank result.
+The user does not need to understand airflow theory or spend hours testing by hand. If they cancel mid-test, they still get whatever the software has already learned — a partial map and conservative curves — not a blank result.
 
 ## What Makes This Different
 
@@ -66,7 +66,7 @@ The result is visible on the **Home** screen:
 * **Editable fan-curve graphs** (temperature → duty for each controllable fan group)
 * **What we learned** — readable visualized evidence (which fans moved which temperatures, by how much, and where diminishing returns set in)
 
-AUTO Fan is not validated until a real PC shows a repeatable BIOS → AUTO → BIOS result on the same locked heat, where AUTO is cooler at similar fan effort or about as warm at less fan effort, and returning to BIOS reproduces the first BIOS reading above this PC’s measured wander. That comparison is the acceptance bar. It is not built yet. Isolated GPU mapping is the next proof after Watch can say whether GPU temperatures are steady.
+AUTO Fan is not validated until a real PC shows a repeatable BIOS → AUTO → BIOS result on the same locked heat, where AUTO is cooler at similar fan effort or about as warm at less fan effort, and returning to BIOS reproduces the first BIOS reading above this PC’s measured wander. That comparison is the acceptance bar. It is not built yet. The next product work after these docs is a **plan** for the smallest Home curve-seed slice (editable temperature → duty curves from existing settled measurements). Isolated GPU mapping is only as needed for curve-quality data — not the next product proof.
 
 ---
 
@@ -85,7 +85,7 @@ One **Optimize** action measures this PC, then builds temperature → duty fan c
 7. Test a few **pairs** among groups that affected the same sensor, including slight effects — not only the strongest fans, and not the first headers the motherboard listed. Pairs run only if screen and refine **finished**. A thermal abort, cancel, or the 30-minute cap during individual tests with a partial map skips pairs; pair knowledge stays Unknown; the user may Continue to Hold. Do not start pairs after a thermal abort in refine.
 8. Fit a simple model of this machine (individual effects plus measured pair leftovers). Build **temperature → duty fan curves** from the measured data — one curve per fan group, showing how duty should respond to CPU or GPU temperature. The app computes the **quietest curves** that meet cooling requirements (using the Quiet–Cool slider and any optional temperature targets as guidance). Noise is **RPM** unless a real sound meter exists.
 9. Show the user **editable fan curves** and **what we learned** on the Home screen. The user may adjust curves manually if desired. The Quiet–Cool slider can regenerate curves at different priorities, but manual editing takes precedence.
-10. **Confirm once:** apply the generated curves, wait until temperatures settle, and compare to the prediction. If it misses, add a little airflow and say the check failed. A miss does not make GPU policy trusted. A predicted GPU temperature below idle, or a plunge below an already-cool start, is not a cooling measurement. Do not search every three-fan combination. Confirmation still runs if Hold applies a setting after skipped pairs.
+10. **Confirm once:** apply the generated curves, wait until temperatures settle, and compare to the prediction. If it misses, add a little airflow and say the check failed. A miss does not make GPU curves trusted. A predicted GPU temperature below idle, or a plunge below an already-cool start, is not a cooling measurement. Do not search every three-fan combination. Confirmation still runs if Hold applies a setting after skipped pairs.
 11. If the user cancels, or fan tests stop after some groups were measured, keep those results and build conservative quieter curves from them. Pair tests that abort before a combined reading do not add a pair map and are not retried; Hold and confirmation may still use the individual map. Confirmation only happens if Hold actually applies a setting.
 12. Afterward, if the PC runs hotter than the test load, the live control may move along the already-generated curves toward higher duty. The curves are not regenerated louder just because the tests were at a low heat.
 
@@ -204,7 +204,7 @@ Testing fans individually is not enough.
 
 A fan can have little effect alone but become extremely valuable when combined with another fan.
 
-The application therefore performs selective combination experiments — **only after individual screen and refine finished**. It chooses pairs from groups that already moved the **same** temperature, **including slight effects**, not from motherboard discovery order and not only from “strong” fans. A thermal abort or cancel during individual tests with a partial map skips pairs. Pair knowledge is Unknown. The user may still Hold a quieter conservative policy from the finished groups.
+The application therefore performs selective combination experiments — **only after individual screen and refine finished**. It chooses pairs from groups that already moved the **same** temperature, **including slight effects**, not from motherboard discovery order and not only from “strong” fans. A thermal abort or cancel during individual tests with a partial map skips pairs. Pair knowledge is Unknown. The user may still Hold quieter conservative curves from the finished groups.
 
 For example:
 
@@ -287,47 +287,47 @@ The user can choose something as simple as:
 
 or use more detailed controls (optional CPU and GPU temperature targets, and optional CPU/GPU stop-test temperatures that cannot exceed 90/83 °C).
 
-The slider stays. A target ceiling is an extra constraint, not a replacement for the simple control.
+The slider stays as a way to regenerate the first-draft curves at a different Quiet–Cool balance. Once the curves are on Home, manual editing takes precedence. A target ceiling is an extra constraint, not a replacement for the slider.
 
-The optimizer then searches for the best operating strategy within those constraints.
+The optimizer then searches for the quietest temperature → duty curves within those constraints.
 
-If the PC later runs hotter than the heat used in the tests, the live policy may raise fans toward the **already-computed cool end** of that slider. It does not quietly pick a louder default just because the model’s confidence label is low.
+If the PC later runs hotter than the heat used in the tests, live control may move along the **already-generated curves** toward higher duty. It does not quietly pick a louder default just because the model’s confidence label is low.
 
 ---
 
-# 7. Optimize for Workload, Not Just Temperature
+# 7. Same curves, different heat
 
-The final result should not necessarily be a single fan curve.
+The user-facing deliverable is the **editable temperature → duty curves** on Home — not a hidden policy the user never sees.
 
-Different workloads produce different **heat** (CPU power, GPU power). They do not change what a given fan physically does to this case.
+Different workloads produce different **heat** (CPU power, GPU power). They do not change what a given fan physically does to this case, and they do not replace those curves with a second experiment tour.
 
 The software characterizes the machine **once** — ideally at two stable heat levels (everyday, then the locked Low with the same CPU workers and heavier GPU). The heavier GPU pass only counts if GPU Core actually rises enough for fan tests to see a change (about 15 °C from idle). Do not add an all-core High synthetic pass or extra CPU threads that hit the abort ceiling. Fan tests use that same frozen Low.
 
-It then re-uses that same model and picks a different operating policy for:
+Live control may move along those same curves as heat changes:
 
 **Desktop**
 
-Keep everything nearly silent.
+Stay toward the quiet end of the curves.
 
 **Gaming**
 
-Prioritize GPU and case airflow.
+Prioritize GPU- and case-linked groups along the same curves.
 
 **CPU rendering**
 
-Prioritize CPU cooling.
+Prioritize CPU-linked groups along the same curves.
 
 **Mixed workloads**
 
-Balance CPU and GPU temperatures.
+Balance CPU- and GPU-linked groups along the same curves.
 
 **Sustained workloads**
 
-Prioritize steady-state cooling.
+Stay toward steady-state cooling on the same curves.
 
 **Short bursts**
 
-Avoid unnecessary fan ramping.
+Avoid unnecessary fan ramping along the same curves.
 
 There is no second experiment tour per activity. Workload detection can be as simple as CPU package power plus GPU power.
 
@@ -409,9 +409,9 @@ In other words:
 
 ---
 
-# 10. Produce an Explanation, Not Just a Fan Curve
+# 10. Show what we learned with the curves
 
-The final output should help the user understand their computer.
+The Home deliverable is the editable curves. **What we learned** is the evidence behind them — not a substitute for the curves, and not a hidden second product.
 
 For example:
 
@@ -491,7 +491,7 @@ It can learn that:
 * the case behaves differently at different power levels
 * seasonal ambient temperature changes affect the optimal strategy
 
-The system periodically **confirms** the current policy and watches for drift (dust, ambient, a new hot game). It does not automatically run a full re-characterization unless that confirmation fails badly. The user is not forced to rebuild fan curves by hand.
+The system periodically **confirms** the current curves and watches for drift (dust, ambient, a new hot game). It does not automatically run a full re-characterization unless that confirmation fails badly. The user is not forced to rebuild fan curves by hand.
 
 ---
 
@@ -514,7 +514,7 @@ They should be able to:
 3. Review **editable fan curves** and **what we learned** on the Home screen
 4. Adjust curves only if they want to
 
-A walk window asks them to watch this PC, then test fans, then hold. Each step waits for them. If Watch hits a temperature stop, or fan tests finish with nothing measured, or a needed temperature disappears, or the GPU resets, that step is retry — not the next page. If they stop it early after some fans were measured, or individual tests hit a temperature limit with a partial map, pair tests are skipped and they still get a usable quieter/safer policy from whatever finished. Confirmation still runs if Hold applies that setting. A finished Watch plus a partial fan map is not the same as a confirmed policy.
+A walk window asks them to watch this PC, then test fans, then hold. Each step waits for them. If Watch hits a temperature stop, or fan tests finish with nothing measured, or a needed temperature disappears, or the GPU resets, that step is retry — not the next page. If they stop it early after some fans were measured, or individual tests hit a temperature limit with a partial map, pair tests are skipped and they still get usable quieter/safer conservative curves from whatever finished. Confirmation still runs if Hold applies that setting. A finished Watch plus a partial fan map is not the same as confirmed curves.
 
 At the end, the Home screen shows:
 

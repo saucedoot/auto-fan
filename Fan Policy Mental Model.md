@@ -1,5 +1,7 @@
 # Fan Policy Mental Model
 
+> **Superseded by Path B (2026-09-21).** The product deliverable is user-editable fan curves on Home, seeded from measurements. Do not implement from this file. [App.md](App.md) and the Current snapshot in [IMPLEMENTATION.md](IMPLEMENTATION.md) win. Old text below that forbids editable FanControl-style curves is historical only.
+
 **Locked. Do not expand this conceptual model.** Further debate is churn. The next useful work is diagnosing the GPU confirmation miss, not more architecture.
 
 > **AUTO Fan measures how each fan changes the thermal system, then uses that measured influence to generate a quiet-to-cool fan policy for the CPU/GPU workload actually occurring.**

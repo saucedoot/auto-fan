@@ -4,7 +4,7 @@
 
 ## Source of truth
 - [App.md](App.md) — product vision (what/why).
-- [IMPLEMENTATION.md](IMPLEMENTATION.md) — current version (v1.15 shipped; Watch 3× BIOS reference + MDE gate). Coverage map, next slice (isolated GPU experiment). Do not skip ahead; update it when a slice finishes or App.md changes. New work is v1.1+, not a new P-phase.
+- [IMPLEMENTATION.md](IMPLEMENTATION.md) — current version (v1.15 shipped; Watch 3× BIOS reference + MDE gate). Coverage map, next slice: propose the smallest Home curve-seed plan. Isolated GPU only if needed for curve-quality data. Do not skip ahead; update it when a slice finishes or App.md changes. New work is v1.1+, not a new P-phase.
 - This file — stack, layout, commands, and hard limits.
 
 ## What this project is

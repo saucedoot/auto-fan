@@ -1,3 +1,5 @@
+> **Research only.** Do not implement Gaussian process, Bayesian optimization, microphone noise, or an experiment planner from this file. [App.md](App.md) wins.
+
 Yes. With the full AUTO Fan context, I would make this a **system-identification + multi-objective optimization engine**, not a conventional fan-curve wizard.
 
 The key is to distinguish between:
