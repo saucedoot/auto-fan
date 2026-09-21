@@ -66,7 +66,7 @@ The result is visible on the **Home** screen:
 * **Editable fan-curve graphs** (temperature → duty for each controllable fan group)
 * **What we learned** — readable visualized evidence (which fans moved which temperatures, by how much, and where diminishing returns set in)
 
-AUTO Fan is not validated until a real PC shows a repeatable BIOS → AUTO → BIOS result on the same locked heat, where AUTO is cooler at similar fan effort or about as warm at less fan effort, and returning to BIOS reproduces the first BIOS reading above this PC’s measured wander. That comparison is the acceptance bar. It is not built yet. The next product work after these docs is a **plan** for the smallest Home curve-seed slice (editable temperature → duty curves from existing settled measurements). Isolated GPU mapping is only as needed for curve-quality data — not the next product proof.
+AUTO Fan is not validated until a real PC shows a repeatable BIOS → AUTO → BIOS result on the same locked heat, where AUTO is cooler at similar fan effort or about as warm at less fan effort, and returning to BIOS reproduces the first BIOS reading above this PC’s measured wander. That comparison is the acceptance bar. It is not built yet. Phase 1 experiment locks (Idle → Everyday → Low → Hot-if-separates; no Home editor yet) are in [PATH_B_PHASE1_EXPERIMENT_PLAN.md](PATH_B_PHASE1_EXPERIMENT_PLAN.md). Isolated GPU mapping is only as needed for curve-quality data — not the next product proof.
 
 ---
 
@@ -301,7 +301,7 @@ The user-facing deliverable is the **editable temperature → duty curves** on H
 
 Different workloads produce different **heat** (CPU power, GPU power). They do not change what a given fan physically does to this case, and they do not replace those curves with a second experiment tour.
 
-The software characterizes the machine **once** — ideally at two stable heat levels (everyday, then the locked Low with the same CPU workers and heavier GPU). The heavier GPU pass only counts if GPU Core actually rises enough for fan tests to see a change (about 15 °C from idle). Do not add an all-core High synthetic pass or extra CPU threads that hit the abort ceiling. Fan tests use that same frozen Low.
+The software characterizes the machine **once** — Idle BIOS observe, Everyday, locked Low, and a hotter game-render-like lamp **only if it actually sits hotter than Low** (locked ladder in [PATH_B_PHASE1_EXPERIMENT_PLAN.md](PATH_B_PHASE1_EXPERIMENT_PLAN.md)). The heavier GPU pass only counts if GPU Core actually rises enough for fan tests to see a change (about 15 °C from idle). Do not add an all-core High synthetic pass or extra CPU threads that hit the abort ceiling. Do not invent a Hot band if it cannot separate. Fan tests reuse those frozen lamps; Phase 1 Hold is still the two-end Quiet–Cool policy.
 
 Live control may move along those same curves as heat changes:
 
