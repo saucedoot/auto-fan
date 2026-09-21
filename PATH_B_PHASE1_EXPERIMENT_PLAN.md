@@ -3,7 +3,7 @@
 **Date:** 2026-09-21 (locks refreshed same day after Danny chat)  
 **For:** Pike review (Ship / Ship after fixes / Do not ship)  
 **Status:** Plan only. Do not implement product C#/XAML in this pass.  
-**Baseline:** [PATH_B_CODE_AND_EXPERIMENT_AUDIT.md](PATH_B_CODE_AND_EXPERIMENT_AUDIT.md) (PR #2). Product truth: [App.md](App.md) Path B on `master`. Honesty slice 1 shipped as **v1.16**. Lamp persist (slice 2 / D2) shipped as **v1.17**. Below-BIOS + dense Low grid (slice 3 / D5) shipped as **v1.18**.  
+**Baseline:** [PATH_B_CODE_AND_EXPERIMENT_AUDIT.md](PATH_B_CODE_AND_EXPERIMENT_AUDIT.md) (PR #2). Product truth: [App.md](App.md) Path B on `master`. Honesty slice 1 shipped as **v1.16**. Lamp persist (slice 2 / D2) shipped as **v1.17**. Below-BIOS + dense Low grid (slice 3 / D5) shipped as **v1.18**. **Remaining slices (Pike must Ship before code):** [PATH_B_PHASE1_FINISH_PLAN.md](PATH_B_PHASE1_FINISH_PLAN.md).  
 **Locked (Danny 2026-09-21):** Phase 1 = honesty fixes + multi-heat experiment so data can support real temperature → duty curves. **No Home curve editor.** Phase 1 Hold stays today’s two-end Quiet–Cool policy. Phase 2 (editor + evidence-on-curves) is a sequel only, and only after the locked build order below.
 
 Abort floors stay **CPU 90 °C / GPU 83 °C / other 95 °C**. Restore-on-exit stays. No GP / Bayesian / mic / planner.

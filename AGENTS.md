@@ -4,7 +4,7 @@
 
 ## Source of truth
 - [App.md](App.md) — product vision (what/why).
-- [IMPLEMENTATION.md](IMPLEMENTATION.md) — current version (v1.18 shipped; below-BIOS + dense absolute Low duty grid). Coverage map, next slice (Everyday coarse probes). Heat-ladder locks live in [PATH_B_PHASE1_EXPERIMENT_PLAN.md](PATH_B_PHASE1_EXPERIMENT_PLAN.md) (gap-fill is Later, not Phase 1). Do not skip ahead; update it when a slice finishes or App.md changes. New work is v1.1+, not a new P-phase.
+- [IMPLEMENTATION.md](IMPLEMENTATION.md) — current version (v1.18 shipped; below-BIOS + dense absolute Low duty grid). **Next: finish-Phase-1 plan — no code until Pike Ships** ([PATH_B_PHASE1_FINISH_PLAN.md](PATH_B_PHASE1_FINISH_PLAN.md)). Heat-ladder locks live in [PATH_B_PHASE1_EXPERIMENT_PLAN.md](PATH_B_PHASE1_EXPERIMENT_PLAN.md) (gap-fill is Later, not Phase 1). Do not skip ahead; update it when a slice finishes or App.md changes. New work is v1.1+, not a new P-phase.
 - This file — stack, layout, commands, and hard limits.
 
 ## What this project is
