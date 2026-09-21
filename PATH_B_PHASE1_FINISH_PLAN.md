@@ -10,13 +10,81 @@ Abort floors stay **CPU 90 °C / GPU 83 °C / other 95 °C**. Restore-on-exit st
 
 ---
 
-## Sequential thinking (what this file is answering)
+## Tools
 
-1. **What is already on master?** Honesty timeout flag (v1.16), stored Everyday + Low heat lamps (v1.17), and quieter-than-BIOS dense Low fan tests (v1.18). Hold is still today’s two-end Quiet–Cool policy. Confirmation still runs after the heater is off. Everyday / Hot fan probes, the temp→duty point list, and BIOS → AUTO → BIOS are not built.
-2. **What is left before Phase 2?** Four required experiment slices (Everyday, Hot-if-it-separates, point builder + confirm-on-lamp, then BIOS → AUTO → BIOS). Home curve editor is Phase 2. Adaptive duty gap-fill is Later. D6 (Hold abort if temps vanish) is optional Edges only — not required to finish Phase 1.
-3. **How to ship it?** Four small PRs in that order. Do not one mega PR.
-4. **What must wait on what?** Everyday before Hot. Both heats (or Hot skipped Unknown) before the point builder. Confirm-on-lamp with that builder. BIOS → AUTO → BIOS last. A Low thermal abort skips Everyday, Hot, and pairs. Ceilings stay 90 / 83.
-5. **This file** is the remaining-work map. Product code waits for Pike Ship.
+**Sequential Thinking MCP is not available.** Searched this run’s tool catalog (namespaces: Figma, Github, cursor, cursor-cloud, cursor-subscriptions) for names like `sequentialthinking`, `sequential_thinking`, `sequential-thinking`. Pattern search on `sequential` and `think` returned **no matches**. No such tool was called. The numbered trail below is Sequential Thinking done **manually**, with revise/branch notes, **before** the remaining-work sections.
+
+---
+
+## Sequential thinking trail (required)
+
+Worked in order. Did not jump to writing slices first.
+
+### Step 1 — Inventory what is already on master
+
+**Thought:** The finish plan is wrong if it treats lamp persist or below-BIOS Low as still to-do. Read [IMPLEMENTATION.md](IMPLEMENTATION.md) Current snapshot and [PATH_B_PHASE1_EXPERIMENT_PLAN.md](PATH_B_PHASE1_EXPERIMENT_PLAN.md) D1/D2/D5 + table E.
+
+**First look (stale local checkout):** snapshot still said **v1.16**, next slice D2 persist lamp. That would over-plan work already merged.
+
+**Revise:** `git fetch origin master`. Master is **v1.18** (`cea5771`, PR #6). Tags: none. Merged: PR #3 v1.16 settled, PR #4 v1.17 lamp persist, PR #5 plan locks, PR #6 v1.18 dense below-BIOS Low.
+
+**On master (plain language):**
+
+- v1.16 — a 90 s still-moving hold is not Measured.
+- v1.17 — Everyday + frozen Low lamps saved with Watch; missing lamp refuses to heat (no silent `DefaultLow`).
+- v1.18 — Low uses absolute dense grid including quieter than BIOS.
+- Hold is still two-end Quiet–Cool policy. Confirmation still off-heat. No Everyday/Hot fan probes. No temp→duty builder. No BIOS → AUTO → BIOS.
+
+**Branch considered:** Ignore remote and plan from v1.16 local. **Rejected** — Pike asked for honesty against master.
+
+**Step 1 conclusion:** Remaining Phase 1 starts **after v1.18**, not after v1.16.
+
+### Step 2 — Remaining Phase 1 to “foundation ready for Phase 2”
+
+**Thought:** Locked plan “done” for the data layer is multi-heat Measured points + confirm-on-lamp + honest labels. Phase 2 editor is a sequel. User locked remaining content: Everyday, Hot-if-separates, point builder + D3/D4, BIOS → AUTO → BIOS. Exclude Home editor, gap-fill. D6 is optional Edges, not required.
+
+**Revise against table E:** Original “foundation ready” = old slices 3–6 (v1.18 + Everyday + Hot + builder/confirm). Slice 7 BIOS A/B/A is the honesty check that does not unlock the editor by itself, but **do not start Phase 2 UI if AUTO is hotter at similar or higher fan effort.** User listed BIOS A/B/A as remaining Phase 1 **to cover**. So F4 is required Phase 1, and Phase 2 is gated on F4 not being a loss.
+
+**Branches rejected:**
+
+- Schedule D6 as a required slice. **Rejected** — Edges only.
+- Schedule adaptive gap-fill. **Rejected** — Later.
+- Include Home editor. **Rejected** — Phase 2.
+- Loosen 90/83, all-core High, invent Hot, AMD GPU, mic/GP/planner. **Rejected** — out of bounds.
+
+**Step 2 conclusion:** Four required leftovers. D6 mention-only.
+
+### Step 3 — Bundle into small PRs
+
+**Thought:** Locked build order after v1.18 is Everyday → Hot → points/confirm/BIOS. User asked for small PRs, not one mega PR. Remaining locked bullets are four items. Map 1:1: F1 Everyday, F2 Hot, F3 builder+D3+D4, F4 BIOS A/B/A.
+
+**Branch:** One mega PR for all remaining. **Rejected** — review and abort risk too large.
+
+**Branch:** Split F3 into “builder” then “confirm-on-lamp.” **Rejected for this plan** — locked plan already bundled D3+D4 with the builder; user listed them as one remaining item. Pike may split at Ship-after-fixes; default stays one PR.
+
+**Branch:** F4 Advanced-only vs every Optimize. **Default:** once at end of a completed Low walk, still on Low lamp, then stop heat and Hold. Pike may move it to Advanced (Ship after fixes). Do not invent a second walk page.
+
+**Step 3 conclusion:** Four slices F1–F4. Each has goal, in/out, files, tests, done-when, risks below.
+
+### Step 4 — Dependencies / abort / ceilings
+
+**Thought:** Everyday and Hot both require Low **Completed**. Hot after Everyday in the walk so the X-axis has a middle band before the risky Hot calibration. Point builder needs heat ids (Everyday stored; Hot kept or skipped Unknown). Confirm-on-lamp needs v1.17 Low lamp + D3 scaling. BIOS A/B/A after confirm so we are not comparing policy to BIOS on an off-heat lie.
+
+**Abort (locked):** Low thermal abort → skip Everyday, Hot, and pairs; may Hold quieter conservative policy; confirmation still if Hold applies. Do not start a new experiment kind after thermal abort in Low. Per-heat 30 min cap, not one timer across heats.
+
+**Ceilings:** CPU 90 / GPU 83 unchanged. Hot calibration hard-stop ~8 °C under (about 82 / 75) is a brake, not a new floor. PLAN DEFAULT (confirm): skip Hot unless preferred CPU or GPU is ≥ 5 °C above Low — label, do not invent temps.
+
+**Branch:** Run Everyday after a Low thermal abort if the user Continue’s. **Rejected** — Danny lock: skip.
+
+**Step 4 conclusion:** F1 → F2 → F3 → F4. Phase 2 only if F4 is not a loss.
+
+### Step 5 — Write this file, then stop
+
+**Branch:** Only add a section to PATH_B_PHASE1_EXPERIMENT_PLAN.md. **Rejected as the main deliverable** — that file is the lock + history; a dedicated finish plan is easier for Pike. Keep a pointer there.
+
+**Do:** This file + IMPLEMENTATION.md snapshot “Next: finish-Phase-1 plan — no code until Pike Ships.” No product C#/XAML. Stop after docs.
+
+**Step 5 conclusion:** Plan markdown is the product of this PR. Code waits for Pike Ship.
 
 ---
 
