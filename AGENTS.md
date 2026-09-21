@@ -4,7 +4,7 @@
 
 ## Source of truth
 - [App.md](App.md) — product vision (what/why).
-- [IMPLEMENTATION.md](IMPLEMENTATION.md) — current version (v1.17 shipped; frozen Watch heat lamp persisted). Coverage map, next slice (Hold abort on lost temps). Do not skip ahead; update it when a slice finishes or App.md changes. New work is v1.1+, not a new P-phase.
+- [IMPLEMENTATION.md](IMPLEMENTATION.md) — current version (v1.17 shipped; frozen Watch heat lamp persisted). Coverage map, next slice (below-BIOS + dense Low grid). Heat-ladder locks live in [PATH_B_PHASE1_EXPERIMENT_PLAN.md](PATH_B_PHASE1_EXPERIMENT_PLAN.md) (gap-fill is Later, not Phase 1). Do not skip ahead; update it when a slice finishes or App.md changes. New work is v1.1+, not a new P-phase.
 - This file — stack, layout, commands, and hard limits.
 
 ## What this project is
