@@ -12,7 +12,7 @@ public sealed class FanTestRunner
     private readonly ThermalTrend _trend = new();
     private readonly ThermalAbortLimits _limits;
     private readonly FanPresence? _presence;
-        private readonly bool _gpuHeatUseful;
+    private readonly bool _gpuHeatUseful;
     private readonly ReferenceAssessment? _stability;
     private readonly HeatProfile? _lowHeat;
 
