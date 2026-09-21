@@ -108,6 +108,8 @@ public partial class MainWindow : Window
         return presence.Completed ? presence : null;
     }
 
+    private HeatProfile? StoredLowHeat() => _baselineStore.GetLatest()?.LowProfile;
+
     private async void OnRunBaseline(object sender, RoutedEventArgs e)
     {
         if (_viewModel.IsBaselineRunning
@@ -166,7 +168,8 @@ public partial class MainWindow : Window
             limits: CurrentAbortLimits(),
             presence: CurrentPresence(),
             gpuHeatUseful: GpuHeat.IsUseful(_baselineStore.GetLatest()),
-            stability: ReferenceStability.FromBaseline(_baselineStore.GetLatest()));
+            stability: ReferenceStability.FromBaseline(_baselineStore.GetLatest()),
+            lowHeat: StoredLowHeat());
 
         try
         {
@@ -208,7 +211,8 @@ public partial class MainWindow : Window
             _scanner,
             _interactionStore,
             limits: CurrentAbortLimits(),
-            presence: CurrentPresence());
+            presence: CurrentPresence(),
+            lowHeat: StoredLowHeat());
 
         try
         {
@@ -514,7 +518,8 @@ public partial class MainWindow : Window
                     limits: CurrentAbortLimits(),
                     presence: CurrentPresence(),
                     gpuHeatUseful: GpuHeat.IsUseful(_baselineStore.GetLatest()),
-                    stability: ReferenceStability.FromBaseline(_baselineStore.GetLatest()))
+                    stability: ReferenceStability.FromBaseline(_baselineStore.GetLatest()),
+                    lowHeat: StoredLowHeat())
                 .RunAsync(
                     token,
                     new Progress<FanTestProgress>(update => ReportWalk(update.Message)))
@@ -541,7 +546,8 @@ public partial class MainWindow : Window
                         _scanner,
                         _interactionStore,
                         limits: CurrentAbortLimits(),
-                        presence: CurrentPresence())
+                        presence: CurrentPresence(),
+                        lowHeat: StoredLowHeat())
                     .RunAsync(
                         token,
                         new Progress<InteractionProgress>(update => ReportWalk(update.Message)),
@@ -844,7 +850,8 @@ public partial class MainWindow : Window
                 limits: CurrentAbortLimits(),
                 presence: CurrentPresence(),
                 gpuHeatUseful: GpuHeat.IsUseful(_baselineStore.GetLatest()),
-                stability: ReferenceStability.FromBaseline(_baselineStore.GetLatest()))
+                stability: ReferenceStability.FromBaseline(_baselineStore.GetLatest()),
+                lowHeat: StoredLowHeat())
                 .RunAsync(
                     token,
                     new Progress<FanTestProgress>(update =>

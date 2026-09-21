@@ -12,8 +12,9 @@ public sealed class FanTestRunner
     private readonly ThermalTrend _trend = new();
     private readonly ThermalAbortLimits _limits;
     private readonly FanPresence? _presence;
-    private readonly bool _gpuHeatUseful;
+        private readonly bool _gpuHeatUseful;
     private readonly ReferenceAssessment? _stability;
+    private readonly HeatProfile? _lowHeat;
 
     public FanTestRunner(
         IHardwareBackend hardware,
@@ -26,7 +27,8 @@ public sealed class FanTestRunner
         ThermalAbortLimits? limits = null,
         FanPresence? presence = null,
         bool gpuHeatUseful = true,
-        ReferenceAssessment? stability = null)
+        ReferenceAssessment? stability = null,
+        HeatProfile? lowHeat = null)
     {
         _hardware = hardware ?? throw new ArgumentNullException(nameof(hardware));
         _workload = workload ?? throw new ArgumentNullException(nameof(workload));
@@ -39,6 +41,7 @@ public sealed class FanTestRunner
         _presence = presence is { Completed: true } ? presence : null;
         _gpuHeatUseful = gpuHeatUseful;
         _stability = stability;
+        _lowHeat = lowHeat;
     }
 
     public async Task<FanTestRun> RunAsync(
@@ -54,6 +57,20 @@ public sealed class FanTestRunner
 
         try
         {
+            if (_lowHeat is not HeatProfile lowHeat)
+            {
+                _workload.Stop();
+                _hardware.RestoreDefaults();
+                return Persist(
+                    id,
+                    startedAt,
+                    samples,
+                    unknown,
+                    skipped,
+                    FanTestRunStatus.Aborted,
+                    HeatProfile.MissingLampDetail);
+            }
+
             IReadOnlyList<FanGroup> groups = _hardware.FanGroups.ToArray();
             var candidates = new List<FanGroup>();
             foreach (FanGroup group in groups)
@@ -141,7 +158,7 @@ public sealed class FanTestRunner
                     waitAbort);
             }
 
-            _workload.Set(WorkloadLevel.Low);
+            _workload.ApplyLow(lowHeat);
             var testedDuties = new Dictionary<string, HashSet<int>>(StringComparer.Ordinal);
             for (int index = 0; index < candidates.Count; index++)
             {

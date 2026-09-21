@@ -12,6 +12,7 @@ public sealed class InteractionRunner
     private readonly ThermalTrend _trend = new();
     private readonly ThermalAbortLimits _limits;
     private readonly FanPresence? _presence;
+    private readonly HeatProfile? _lowHeat;
 
     public InteractionRunner(
         IHardwareBackend hardware,
@@ -22,7 +23,8 @@ public sealed class InteractionRunner
         FanTestSchedule? schedule = null,
         Func<TimeSpan, CancellationToken, Task>? delay = null,
         ThermalAbortLimits? limits = null,
-        FanPresence? presence = null)
+        FanPresence? presence = null,
+        HeatProfile? lowHeat = null)
     {
         _hardware = hardware ?? throw new ArgumentNullException(nameof(hardware));
         _workload = workload ?? throw new ArgumentNullException(nameof(workload));
@@ -33,6 +35,7 @@ public sealed class InteractionRunner
         _delay = delay ?? ((span, token) => Task.Delay(span, token));
         _limits = ThermalAbortLimits.FromUser(limits?.CpuCelsius, limits?.GpuCelsius);
         _presence = presence is { Completed: true } ? presence : null;
+        _lowHeat = lowHeat;
     }
 
     public async Task<InteractionRun> RunAsync(
@@ -47,6 +50,17 @@ public sealed class InteractionRunner
 
         try
         {
+            if (_lowHeat is not HeatProfile lowHeat)
+            {
+                return Finish(
+                    id,
+                    startedAt,
+                    samples,
+                    skipped,
+                    FanTestRunStatus.Aborted,
+                    HeatProfile.MissingLampDetail);
+            }
+
             CollectSkips(skipped);
             IReadOnlyList<(FanGroup First, FanGroup Second)> pairs = InteractionSelector.Select(
                 _hardware.FanGroups,
@@ -58,7 +72,7 @@ public sealed class InteractionRunner
                 return Finish(id, startedAt, samples, skipped, FanTestRunStatus.Aborted, waitAbort);
             }
 
-            _workload.Set(WorkloadLevel.Low);
+            _workload.ApplyLow(lowHeat);
             for (int index = 0; index < pairs.Count; index++)
             {
                 FanGroup first = FindGroup(pairs[index].First.Id) ?? pairs[index].First;

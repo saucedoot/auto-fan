@@ -14,6 +14,8 @@ internal sealed class FakeWorkloadActuator : IWorkloadActuator
 
     public bool GpuLoadAvailable { get; set; } = true;
 
+    public HeatProfile? LockedEveryday { get; private set; }
+
     public HeatProfile? LockedLow { get; private set; }
 
     public bool HasFault { get; set; }
@@ -25,15 +27,25 @@ internal sealed class FakeWorkloadActuator : IWorkloadActuator
 
     public void Set(WorkloadLevel level)
     {
-        Current = level;
-        _history.Add(level);
         if (level == WorkloadLevel.Low)
         {
-            HeatProfile profile = LockedLow ?? HeatProfile.DefaultLow;
-            LockedLow = profile;
-            _applied.Add(profile);
-            OnApplyLow?.Invoke(profile);
+            if (LockedLow is null)
+            {
+                throw new InvalidOperationException(HeatProfile.MissingLampDetail);
+            }
+
+            ApplyLow(LockedLow);
+            _history.Add(level);
+            return;
         }
+
+        if (level == WorkloadLevel.Everyday)
+        {
+            LockedEveryday = HeatProfile.Everyday;
+        }
+
+        Current = level;
+        _history.Add(level);
     }
 
     public void ApplyLow(HeatProfile profile)

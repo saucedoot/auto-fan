@@ -6,6 +6,13 @@ namespace AutoFan.Core.Tests;
 
 public sealed class FanTestRunnerTests
 {
+    private static readonly HeatProfile StoredLow = new(
+        HeatProfile.EverydayCpuWorkers,
+        2560,
+        1440,
+        1,
+        48);
+
     [Fact]
     public async Task Run_writes_one_motherboard_group_at_a_time_and_skips_pump_and_gpu()
     {
@@ -24,13 +31,15 @@ public sealed class FanTestRunnerTests
             store,
             clock,
             FastSchedule(),
-            Delay(clock));
+            Delay(clock),
+            lowHeat: StoredLow);
 
         FanTestRun run = await runner.RunAsync();
 
         Assert.Equal(FanTestRunStatus.Completed, run.Status);
         Assert.Null(run.AbortDetail);
-        Assert.Equal([WorkloadLevel.Low], workload.History);
+        Assert.Equal([StoredLow], workload.AppliedLow);
+        Assert.DoesNotContain(HeatProfile.DefaultLow, workload.AppliedLow);
         Assert.True(workload.StopCount >= 1);
         Assert.Equal(frontOriginal, DutyOf(inner, FakeHardwareBackend.FrontFanId));
         Assert.Equal(rearOriginal, DutyOf(inner, FakeHardwareBackend.RearFanId));
@@ -94,7 +103,8 @@ public sealed class FanTestRunnerTests
             store,
             clock,
             FastSchedule(),
-            Delay(clock));
+            Delay(clock),
+            lowHeat: StoredLow);
 
         FanTestRun run = await runner.RunAsync();
 
@@ -133,7 +143,8 @@ public sealed class FanTestRunnerTests
             store,
             clock,
             FastSchedule(),
-            Delay(clock));
+            Delay(clock),
+            lowHeat: StoredLow);
 
         FanTestRun run = await runner.RunAsync();
 
@@ -181,7 +192,8 @@ public sealed class FanTestRunnerTests
                 }
 
                 return Task.CompletedTask;
-            });
+            },
+            lowHeat: StoredLow);
 
         FanTestRun run = await runner.RunAsync();
 
@@ -209,7 +221,8 @@ public sealed class FanTestRunnerTests
             store,
             clock,
             FastSchedule(),
-            Delay(clock));
+            Delay(clock),
+            lowHeat: StoredLow);
 
         FanTestRun run = await runner.RunAsync();
 
@@ -242,7 +255,8 @@ public sealed class FanTestRunnerTests
                 token.ThrowIfCancellationRequested();
                 clock.Advance(span);
                 return Task.CompletedTask;
-            });
+            },
+            lowHeat: StoredLow);
 
         FanTestRun run = await runner.RunAsync(cts.Token);
 
@@ -269,7 +283,8 @@ public sealed class FanTestRunnerTests
             store,
             clock,
             FastSchedule(),
-            Delay(clock));
+            Delay(clock),
+            lowHeat: StoredLow);
 
         FanTestRun run = await runner.RunAsync();
 
@@ -303,7 +318,8 @@ public sealed class FanTestRunnerTests
                 delays++;
                 inner.OverrideTemperature(FakeHardwareBackend.CpuSensorId, 50 + (delays * 0.4));
                 return Task.CompletedTask;
-            });
+            },
+            lowHeat: StoredLow);
 
         FanTestRun run = await runner.RunAsync();
 
@@ -334,7 +350,8 @@ public sealed class FanTestRunnerTests
             store,
             clock,
             FastSchedule(),
-            Delay(clock));
+            Delay(clock),
+            lowHeat: StoredLow);
 
         FanTestRun run = await runner.RunAsync();
 
@@ -363,7 +380,8 @@ public sealed class FanTestRunnerTests
             store,
             clock,
             FastSchedule(),
-            Delay(clock));
+            Delay(clock),
+            lowHeat: StoredLow);
 
         FanTestRun run = await runner.RunAsync(
             onlyGroupIds: [FakeHardwareBackend.FrontFanId]);
@@ -400,7 +418,8 @@ public sealed class FanTestRunnerTests
             clock,
             FastSchedule(),
             Delay(clock),
-            presence: presence);
+            presence: presence,
+            lowHeat: StoredLow);
 
         FanTestRun run = await runner.RunAsync();
 
@@ -433,7 +452,8 @@ public sealed class FanTestRunnerTests
             clock,
             FastSchedule(),
             Delay(clock),
-            gpuHeatUseful: false);
+            gpuHeatUseful: false,
+            lowHeat: StoredLow);
 
         FanTestRun run = await runner.RunAsync();
 
@@ -513,7 +533,8 @@ public sealed class FanTestRunnerTests
                     SensorStability.Stable,
                     0.2,
                     0.5,
-                    [54.0, 54.1, 54.0])));
+                    [54.0, 54.1, 54.0])),
+            lowHeat: StoredLow);
 
         FanTestRun run = await runner.RunAsync();
 
@@ -525,6 +546,62 @@ public sealed class FanTestRunnerTests
         Assert.DoesNotContain(
             run.Influence,
             entry => entry.Target == InfluenceTarget.Gpu && entry.SkipReason == FanTestReasons.GpuNotStable);
+    }
+
+    [Fact]
+    public async Task Run_applies_the_stored_low_profile_not_default_low()
+    {
+        Assert.NotEqual(HeatProfile.DefaultLow, StoredLow);
+        var inner = new FakeHardwareBackend();
+        var workload = new FakeWorkloadActuator();
+        var store = new InMemoryFanTestStore();
+        var clock = new ManualTimeProvider();
+        var runner = new FanTestRunner(
+            inner,
+            workload,
+            new FixedCompetingSoftwareScanner(),
+            store,
+            clock,
+            FastSchedule(),
+            Delay(clock),
+            lowHeat: StoredLow);
+
+        FanTestRun run = await runner.RunAsync();
+
+        Assert.Equal(FanTestRunStatus.Completed, run.Status);
+        Assert.Equal([StoredLow], workload.AppliedLow);
+        Assert.DoesNotContain(HeatProfile.DefaultLow, workload.AppliedLow);
+        Assert.Equal(StoredLow, workload.LockedLow);
+    }
+
+    [Fact]
+    public async Task Run_missing_stored_profile_does_not_heat_and_does_not_write()
+    {
+        var inner = new FakeHardwareBackend();
+        var hardware = new RecordingHardwareBackend(inner);
+        var workload = new FakeWorkloadActuator();
+        var store = new InMemoryFanTestStore();
+        var clock = new ManualTimeProvider();
+        var runner = new FanTestRunner(
+            hardware,
+            workload,
+            new FixedCompetingSoftwareScanner(),
+            store,
+            clock,
+            FastSchedule(),
+            Delay(clock),
+            lowHeat: null);
+
+        FanTestRun run = await runner.RunAsync();
+
+        Assert.Equal(FanTestRunStatus.Aborted, run.Status);
+        Assert.Equal(HeatProfile.MissingLampDetail, run.AbortDetail);
+        Assert.Empty(workload.AppliedLow);
+        Assert.Empty(workload.History);
+        Assert.Null(workload.LockedLow);
+        Assert.DoesNotContain(hardware.Events, item => item.StartsWith("write:", StringComparison.Ordinal));
+        Assert.Empty(run.Samples);
+        Assert.Same(run, store.GetLatest());
     }
 
     private static FanTestSchedule FastSchedule() =>

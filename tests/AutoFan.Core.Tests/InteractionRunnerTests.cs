@@ -6,6 +6,13 @@ namespace AutoFan.Core.Tests;
 
 public sealed class InteractionRunnerTests
 {
+    private static readonly HeatProfile StoredLow = new(
+        HeatProfile.EverydayCpuWorkers,
+        2560,
+        1440,
+        1,
+        48);
+
     [Fact]
     public async Task Run_tests_pair_under_low_load_and_skips_pump_gpu()
     {
@@ -22,12 +29,14 @@ public sealed class InteractionRunnerTests
             store,
             clock,
             FastSchedule(),
-            Delay(clock));
+            Delay(clock),
+            lowHeat: StoredLow);
 
         InteractionRun run = await runner.RunAsync(influence: PairInfluence());
 
         Assert.Equal(FanTestRunStatus.Completed, run.Status);
-        Assert.Equal([WorkloadLevel.Low], workload.History);
+        Assert.Equal([StoredLow], workload.AppliedLow);
+        Assert.DoesNotContain(HeatProfile.DefaultLow, workload.AppliedLow);
         Assert.True(workload.StopCount >= 1);
         Assert.False(inner.HasActiveSoftwareControl);
         Assert.DoesNotContain(hardware.Events, item => item.StartsWith($"write:{FakeHardwareBackend.PumpId}", StringComparison.Ordinal));
@@ -70,13 +79,14 @@ public sealed class InteractionRunnerTests
                 }
 
                 return Task.CompletedTask;
-            });
+            },
+            lowHeat: StoredLow);
 
         InteractionRun run = await runner.RunAsync();
 
         Assert.Equal(FanTestRunStatus.Completed, run.Status);
         Assert.True(delays >= 2);
-        Assert.Equal(WorkloadLevel.Low, workload.History[0]);
+        Assert.Equal(StoredLow, Assert.Single(workload.AppliedLow));
     }
 
     [Fact]
@@ -95,7 +105,8 @@ public sealed class InteractionRunnerTests
             store,
             clock,
             FastSchedule(),
-            Delay(clock));
+            Delay(clock),
+            lowHeat: StoredLow);
 
         InteractionRun run = await runner.RunAsync();
 
@@ -128,7 +139,8 @@ public sealed class InteractionRunnerTests
                 token.ThrowIfCancellationRequested();
                 clock.Advance(span);
                 return Task.CompletedTask;
-            });
+            },
+            lowHeat: StoredLow);
 
         InteractionRun run = await runner.RunAsync(cts.Token, influence: PairInfluence());
 
@@ -158,7 +170,8 @@ public sealed class InteractionRunnerTests
                 delays++;
                 inner.OverrideTemperature(FakeHardwareBackend.CpuSensorId, 50 + (delays * 0.4));
                 return Task.CompletedTask;
-            });
+            },
+            lowHeat: StoredLow);
 
         InteractionRun run = await runner.RunAsync(influence: PairInfluence());
 
@@ -168,6 +181,35 @@ public sealed class InteractionRunnerTests
         Assert.DoesNotContain(
             run.Effects,
             entry => entry.Evidence == MetricEvidence.Measured && entry.ResidualCelsius is not null);
+    }
+
+    [Fact]
+    public async Task Run_missing_stored_profile_does_not_heat_and_does_not_write()
+    {
+        var inner = new FakeHardwareBackend();
+        var hardware = new RecordingHardwareBackend(inner);
+        var workload = new FakeWorkloadActuator();
+        var store = new InMemoryInteractionStore();
+        var clock = new ManualTimeProvider();
+        var runner = new InteractionRunner(
+            hardware,
+            workload,
+            new FixedCompetingSoftwareScanner(),
+            store,
+            clock,
+            FastSchedule(),
+            Delay(clock),
+            lowHeat: null);
+
+        InteractionRun run = await runner.RunAsync(influence: PairInfluence());
+
+        Assert.Equal(FanTestRunStatus.Aborted, run.Status);
+        Assert.Equal(HeatProfile.MissingLampDetail, run.AbortDetail);
+        Assert.Empty(workload.AppliedLow);
+        Assert.Empty(workload.History);
+        Assert.DoesNotContain(hardware.Events, item => item.StartsWith("write:", StringComparison.Ordinal));
+        Assert.Empty(run.Samples);
+        Assert.Same(run, store.GetLatest());
     }
 
     private static bool HasAloneThenCombined(IReadOnlyList<string> events)

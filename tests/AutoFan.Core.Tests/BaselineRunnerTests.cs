@@ -45,6 +45,9 @@ public sealed class BaselineRunnerTests
             workload.History);
         Assert.NotNull(workload.LockedLow);
         Assert.Equal(HeatProfile.EverydayCpuWorkers, workload.LockedLow.CpuWorkers);
+        Assert.Equal(HeatProfile.Everyday, run.EverydayProfile);
+        Assert.Equal(workload.LockedLow, run.LowProfile);
+        Assert.NotNull(run.LowProfile);
         Assert.DoesNotContain(WorkloadLevel.High, workload.History);
         Assert.True(workload.StopCount >= 1);
         Assert.Equal(80, DutyOf(hardware, FakeHardwareBackend.FrontFanId));
@@ -79,6 +82,8 @@ public sealed class BaselineRunnerTests
         Assert.Equal(BaselineRunStatus.Aborted, run.Status);
         Assert.Contains("CPU", run.AbortDetail, StringComparison.Ordinal);
         Assert.True(workload.StopCount >= 1);
+        Assert.Null(run.EverydayProfile);
+        Assert.Null(run.LowProfile);
         Assert.Equal(80, DutyOf(hardware, FakeHardwareBackend.FrontFanId));
         Assert.True(hardware.HasActiveSoftwareControl);
     }

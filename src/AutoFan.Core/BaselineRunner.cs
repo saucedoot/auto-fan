@@ -267,7 +267,9 @@ public sealed class BaselineRunner
             ThermalDynamics.FirstAmbient(samples),
             _workload.GpuLoadAvailable,
             samples.ToArray(),
-            metrics);
+            metrics,
+            _workload.LockedEveryday,
+            _workload.LockedLow);
         _store.Save(run);
         return run;
     }
