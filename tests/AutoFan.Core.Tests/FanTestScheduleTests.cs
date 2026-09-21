@@ -45,4 +45,16 @@ public sealed class FanTestScheduleTests
         Assert.False(FanTestSchedule.IsAlreadyAtMax(70, []));
         Assert.False(FanTestSchedule.IsAlreadyAtMax(100, [15, 30]));
     }
+
+    [Fact]
+    public void AbsoluteDuties_everyday_coarse_grid_is_below_and_above_bios_loud_first()
+    {
+        IReadOnlyList<int> duties = FanTestSchedule.AbsoluteDuties(
+            FanTestSchedule.EverydayScreenDuties,
+            biosDuty: 70);
+
+        Assert.Equal([100, 70, 40, 20], duties);
+        Assert.Equal([20, 40, 70, 100], FanTestSchedule.EverydayScreenDuties);
+        Assert.Equal([55, 85], FanTestSchedule.EverydayRefineDuties);
+    }
 }

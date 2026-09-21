@@ -43,4 +43,16 @@ public sealed class SyntheticWorkloadActuatorTests
         Assert.Equal(HeatProfile.Everyday, actuator.LockedEveryday);
         Assert.Null(actuator.LockedLow);
     }
+
+    [Fact]
+    public void Apply_everyday_uses_the_stored_profile()
+    {
+        using var actuator = new SyntheticWorkloadActuator();
+        HeatProfile stored = new(HeatProfile.EverydayCpuWorkers, 1280, 720, 1, 12);
+        Assert.NotEqual(HeatProfile.Everyday, stored);
+
+        actuator.ApplyEveryday(stored);
+
+        Assert.Equal(stored, actuator.LockedEveryday);
+    }
 }

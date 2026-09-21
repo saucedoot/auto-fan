@@ -6,4 +6,5 @@ public sealed record FanTestSample(
     string FanGroupName,
     FanTestStage Stage,
     HardwareSnapshot Snapshot,
-    bool Settled = false);
+    bool Settled = false,
+    HeatId HeatId = HeatId.Low);

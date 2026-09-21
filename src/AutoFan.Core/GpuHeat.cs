@@ -5,7 +5,13 @@ namespace AutoFan.Core;
 /// </summary>
 public static class GpuHeat
 {
-    public static bool IsUseful(BaselineRun? baseline)
+    public static bool IsUseful(BaselineRun? baseline) =>
+        RiseIsUseful(baseline, BaselineMetricNames.GpuRiseCelsius);
+
+    public static bool EverydayIsUseful(BaselineRun? baseline) =>
+        RiseIsUseful(baseline, BaselineMetricNames.GpuEverydayRiseCelsius);
+
+    private static bool RiseIsUseful(BaselineRun? baseline, string metricName)
     {
         if (baseline is null)
         {
@@ -14,7 +20,7 @@ public static class GpuHeat
 
         foreach (BaselineMetric metric in baseline.Metrics)
         {
-            if (metric.Name != BaselineMetricNames.GpuRiseCelsius
+            if (metric.Name != metricName
                 || metric.Evidence != MetricEvidence.Measured
                 || metric.Value is not double rise)
             {

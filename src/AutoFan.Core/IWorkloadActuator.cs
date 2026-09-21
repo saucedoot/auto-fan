@@ -22,5 +22,7 @@ public interface IWorkloadActuator : IDisposable
 
     void ApplyLow(HeatProfile profile);
 
+    void ApplyEveryday(HeatProfile profile);
+
     void Stop();
 }

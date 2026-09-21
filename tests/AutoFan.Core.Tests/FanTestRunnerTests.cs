@@ -726,6 +726,262 @@ public sealed class FanTestRunnerTests
         Assert.Same(run, store.GetLatest());
     }
 
+    [Fact]
+    public async Task Run_everyday_after_low_completed_uses_coarse_grid_on_movers_only()
+    {
+        HeatProfile storedEveryday = new(HeatProfile.EverydayCpuWorkers, 1280, 720, 1, 12);
+        var inner = new FakeHardwareBackend();
+        Assert.True(inner.TrySetDuty(FakeHardwareBackend.FrontFanId, 70).Accepted);
+        var hardware = new SensorFollowsFanDutyBackend(
+            inner,
+            FakeHardwareBackend.FrontFanId,
+            FakeHardwareBackend.CpuSensorId,
+            coolAtDuty: 90);
+        var workload = new FakeWorkloadActuator();
+        var store = new InMemoryFanTestStore();
+        var clock = new ManualTimeProvider();
+        var runner = new FanTestRunner(
+            hardware,
+            workload,
+            new FixedCompetingSoftwareScanner(),
+            store,
+            clock,
+            FastSchedule(),
+            Delay(clock),
+            lowHeat: StoredLow,
+            everydayHeat: storedEveryday);
+
+        FanTestRun run = await runner.RunAsync(
+            onlyGroupIds: [FakeHardwareBackend.FrontFanId, FakeHardwareBackend.RearFanId]);
+
+        Assert.Equal(FanTestRunStatus.Completed, run.Status);
+        Assert.Equal([StoredLow], workload.AppliedLow);
+        Assert.Equal([storedEveryday], workload.AppliedEveryday);
+        Assert.DoesNotContain(HeatProfile.Everyday, workload.AppliedEveryday);
+        Assert.Contains(run.Samples, sample => sample.HeatId == HeatId.Low && sample.Settled);
+        Assert.Contains(run.Samples, sample => sample.HeatId == HeatId.Everyday);
+        Assert.Equal(
+            [100, 90, 75, 60, 45, 30, 15, 85, 70, 50, 40, 20, 100, 70, 40, 20, 85, 55],
+            DutiesWritten(hardware.Events, FakeHardwareBackend.FrontFanId));
+        Assert.Equal(
+            [100, 90, 75, 60, 45, 30, 15],
+            DutiesWritten(hardware.Events, FakeHardwareBackend.RearFanId));
+        Assert.DoesNotContain(
+            hardware.Events,
+            item => item.StartsWith($"write:{FakeHardwareBackend.RearFanId}:55", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Run_skips_everyday_when_low_aborts()
+    {
+        var inner = new FakeHardwareBackend();
+        Assert.True(inner.TrySetDuty(FakeHardwareBackend.FrontFanId, 40).Accepted);
+        inner.RestoreDefaults();
+        var hardware = new RecordingHardwareBackend(inner);
+        var workload = new FakeWorkloadActuator();
+        var store = new InMemoryFanTestStore();
+        var clock = new ManualTimeProvider();
+        int delays = 0;
+        var runner = new FanTestRunner(
+            hardware,
+            workload,
+            new FixedCompetingSoftwareScanner(),
+            store,
+            clock,
+            FastSchedule(),
+            (span, token) =>
+            {
+                token.ThrowIfCancellationRequested();
+                clock.Advance(span);
+                delays++;
+                if (delays == 8)
+                {
+                    inner.OverrideTemperature(FakeHardwareBackend.CpuSensorId, SafetyLimits.CpuAbortCelsius + 2);
+                }
+
+                return Task.CompletedTask;
+            },
+            lowHeat: StoredLow,
+            everydayHeat: HeatProfile.Everyday);
+
+        FanTestRun run = await runner.RunAsync();
+
+        Assert.Equal(FanTestRunStatus.Aborted, run.Status);
+        Assert.Empty(workload.AppliedEveryday);
+        Assert.DoesNotContain(run.Samples, sample => sample.HeatId == HeatId.Everyday);
+    }
+
+    [Fact]
+    public async Task Run_missing_everyday_lamp_does_not_heat_everyday_after_low()
+    {
+        var inner = new FakeHardwareBackend();
+        var hardware = new SensorFollowsFanDutyBackend(
+            inner,
+            FakeHardwareBackend.FrontFanId,
+            FakeHardwareBackend.CpuSensorId,
+            coolAtDuty: 90);
+        var workload = new FakeWorkloadActuator();
+        var store = new InMemoryFanTestStore();
+        var clock = new ManualTimeProvider();
+        var runner = new FanTestRunner(
+            hardware,
+            workload,
+            new FixedCompetingSoftwareScanner(),
+            store,
+            clock,
+            FastSchedule(),
+            Delay(clock),
+            lowHeat: StoredLow,
+            everydayHeat: null);
+
+        FanTestRun run = await runner.RunAsync(onlyGroupIds: [FakeHardwareBackend.FrontFanId]);
+
+        Assert.Equal(FanTestRunStatus.Completed, run.Status);
+        Assert.Equal([StoredLow], workload.AppliedLow);
+        Assert.Empty(workload.AppliedEveryday);
+        Assert.DoesNotContain(run.Samples, sample => sample.HeatId == HeatId.Everyday);
+        Assert.Equal(
+            [100, 90, 75, 60, 45, 30, 15, 85, 70, 50, 40, 20],
+            DutiesWritten(hardware.Events, FakeHardwareBackend.FrontFanId));
+    }
+
+    [Fact]
+    public async Task Run_everyday_skips_nvidia_when_everyday_gpu_rise_is_not_enough()
+    {
+        var inner = new FakeHardwareBackend();
+        var hardware = new DualFollowsFanDutyBackend(inner);
+        var workload = new FakeWorkloadActuator();
+        var store = new InMemoryFanTestStore();
+        var clock = new ManualTimeProvider();
+        var runner = new FanTestRunner(
+            hardware,
+            workload,
+            new FixedCompetingSoftwareScanner(),
+            store,
+            clock,
+            FastSchedule(),
+            Delay(clock),
+            gpuHeatUseful: true,
+            lowHeat: StoredLow,
+            everydayHeat: HeatProfile.Everyday,
+            everydayGpuHeatUseful: false);
+
+        FanTestRun run = await runner.RunAsync(
+            onlyGroupIds: [FakeHardwareBackend.FrontFanId, FakeHardwareBackend.GpuFanId]);
+
+        Assert.Equal(FanTestRunStatus.Completed, run.Status);
+        Assert.NotEmpty(DutiesWritten(hardware.Events, FakeHardwareBackend.GpuFanId));
+        Assert.Equal(
+            [100, 90, 75, 60, 45, 30, 15, 85, 70, 50, 40, 20],
+            DutiesWritten(hardware.Events, FakeHardwareBackend.GpuFanId));
+        Assert.Contains(
+            run.Skipped,
+            skip => skip.FanGroupId == FakeHardwareBackend.GpuFanId
+                && skip.Reason == FanTestReasons.GpuHeatInsufficient);
+        Assert.DoesNotContain(
+            run.Samples,
+            sample => sample.HeatId == HeatId.Everyday
+                && sample.FanGroupId == FakeHardwareBackend.GpuFanId
+                && InfluenceMapBuilder.IsSpeedStage(sample.Stage));
+        Assert.Contains(run.Samples, sample => sample.HeatId == HeatId.Everyday);
+    }
+
+    [Fact]
+    public async Task Run_everyday_drops_stalled_zero_rpm_and_timeout_is_not_settled()
+    {
+        var inner = new FakeHardwareBackend();
+        inner.SetStallAtOrBelow(FakeHardwareBackend.FrontFanId, 20);
+        var hardware = new SensorFollowsFanDutyBackend(
+            inner,
+            FakeHardwareBackend.FrontFanId,
+            FakeHardwareBackend.CpuSensorId,
+            coolAtDuty: 90);
+        var workload = new FakeWorkloadActuator();
+        var store = new InMemoryFanTestStore();
+        var clock = new ManualTimeProvider();
+        int delays = 0;
+        var runner = new FanTestRunner(
+            hardware,
+            workload,
+            new FixedCompetingSoftwareScanner(),
+            store,
+            clock,
+            new FanTestSchedule(TimeSpan.FromSeconds(8), TimeSpan.FromSeconds(1)),
+            (span, token) =>
+            {
+                token.ThrowIfCancellationRequested();
+                clock.Advance(span);
+                delays++;
+                if (workload.AppliedEveryday.Count > 0)
+                {
+                    inner.OverrideTemperature(FakeHardwareBackend.CpuSensorId, 50 + (delays * 0.4));
+                }
+
+                return Task.CompletedTask;
+            },
+            lowHeat: StoredLow,
+            everydayHeat: HeatProfile.Everyday);
+
+        FanTestRun run = await runner.RunAsync(onlyGroupIds: [FakeHardwareBackend.FrontFanId]);
+
+        Assert.Equal(FanTestRunStatus.Completed, run.Status);
+        Assert.Contains(hardware.Events, item => item == $"write:{FakeHardwareBackend.FrontFanId}:20");
+        Assert.DoesNotContain(
+            run.Samples.Where(sample => sample.HeatId == HeatId.Everyday),
+            sample => sample.FanGroupId == FakeHardwareBackend.FrontFanId
+                && InfluenceMapBuilder.IsSpeedStage(sample.Stage)
+                && sample.Snapshot.FanGroups.First(fan => fan.Id == FakeHardwareBackend.FrontFanId).Rpm is not > 0);
+        Assert.Contains(run.Samples, sample => sample.HeatId == HeatId.Low && sample.Settled);
+        Assert.DoesNotContain(
+            run.Samples.Where(sample => sample.HeatId == HeatId.Everyday && InfluenceMapBuilder.IsSpeedStage(sample.Stage)),
+            sample => sample.Settled);
+    }
+
+    [Fact]
+    public async Task Run_everyday_uses_its_own_thirty_minute_cap()
+    {
+        var inner = new FakeHardwareBackend();
+        var hardware = new SensorFollowsFanDutyBackend(
+            inner,
+            FakeHardwareBackend.FrontFanId,
+            FakeHardwareBackend.CpuSensorId,
+            coolAtDuty: 90);
+        var workload = new FakeWorkloadActuator();
+        var store = new InMemoryFanTestStore();
+        var clock = new ManualTimeProvider();
+        int delays = 0;
+        bool stretchedLow = false;
+        var runner = new FanTestRunner(
+            hardware,
+            workload,
+            new FixedCompetingSoftwareScanner(),
+            store,
+            clock,
+            new FanTestSchedule(TimeSpan.FromMinutes(40), TimeSpan.FromSeconds(1)),
+            (span, token) =>
+            {
+                token.ThrowIfCancellationRequested();
+                delays++;
+                if (!stretchedLow && delays == 8)
+                {
+                    stretchedLow = true;
+                    clock.Advance(TimeSpan.FromMinutes(29));
+                }
+
+                clock.Advance(span);
+                return Task.CompletedTask;
+            },
+            lowHeat: StoredLow,
+            everydayHeat: HeatProfile.Everyday);
+
+        FanTestRun run = await runner.RunAsync(onlyGroupIds: [FakeHardwareBackend.FrontFanId]);
+
+        Assert.Equal(FanTestRunStatus.Completed, run.Status);
+        Assert.Equal([HeatProfile.Everyday], workload.AppliedEveryday);
+        Assert.Contains(run.Samples, sample => sample.HeatId == HeatId.Everyday);
+        Assert.Contains(hardware.Events, item => item == $"write:{FakeHardwareBackend.FrontFanId}:20");
+    }
+
     private static FanTestSchedule FastSchedule() =>
         new(TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(1));
 
@@ -799,6 +1055,106 @@ public sealed class FanTestRunnerTests
             _inner.OverrideTemperature(
                 FakeHardwareBackend.CpuSensorId,
                 duty >= _coolAtDuty ? 38 : 45);
+        }
+    }
+
+    private sealed class SensorFollowsFanDutyBackend : IHardwareBackend
+    {
+        private readonly FakeHardwareBackend _inner;
+        private readonly RecordingHardwareBackend _recording;
+        private readonly string _fanId;
+        private readonly string _sensorId;
+        private readonly int _coolAtDuty;
+
+        public SensorFollowsFanDutyBackend(
+            FakeHardwareBackend inner,
+            string fanId,
+            string sensorId,
+            int coolAtDuty)
+        {
+            _inner = inner;
+            _recording = new RecordingHardwareBackend(inner);
+            _fanId = fanId;
+            _sensorId = sensorId;
+            _coolAtDuty = coolAtDuty;
+            Sync();
+        }
+
+        public List<string> Events => _recording.Events;
+
+        public string DisplayName => _recording.DisplayName;
+
+        public bool IsDemo => _recording.IsDemo;
+
+        public IReadOnlyList<FanGroup> FanGroups => _recording.FanGroups;
+
+        public bool HasActiveSoftwareControl => _recording.HasActiveSoftwareControl;
+
+        public HardwareSnapshot ReadSnapshot() => _recording.ReadSnapshot();
+
+        public DutySetResult TrySetDuty(string fanGroupId, int percent)
+        {
+            DutySetResult result = _recording.TrySetDuty(fanGroupId, percent);
+            Sync();
+            return result;
+        }
+
+        public void RestoreDefaults()
+        {
+            _recording.RestoreDefaults();
+            Sync();
+        }
+
+        private void Sync()
+        {
+            int duty = _inner.FanGroups.Single(fan => fan.Id == _fanId).DutyCyclePercent ?? 0;
+            _inner.OverrideTemperature(_sensorId, duty >= _coolAtDuty ? 38 : 45);
+        }
+    }
+
+    private sealed class DualFollowsFanDutyBackend : IHardwareBackend
+    {
+        private readonly FakeHardwareBackend _inner;
+        private readonly RecordingHardwareBackend _recording;
+
+        public DualFollowsFanDutyBackend(FakeHardwareBackend inner)
+        {
+            _inner = inner;
+            _recording = new RecordingHardwareBackend(inner);
+            Sync();
+        }
+
+        public List<string> Events => _recording.Events;
+
+        public string DisplayName => _recording.DisplayName;
+
+        public bool IsDemo => _recording.IsDemo;
+
+        public IReadOnlyList<FanGroup> FanGroups => _recording.FanGroups;
+
+        public bool HasActiveSoftwareControl => _recording.HasActiveSoftwareControl;
+
+        public HardwareSnapshot ReadSnapshot() => _recording.ReadSnapshot();
+
+        public DutySetResult TrySetDuty(string fanGroupId, int percent)
+        {
+            DutySetResult result = _recording.TrySetDuty(fanGroupId, percent);
+            Sync();
+            return result;
+        }
+
+        public void RestoreDefaults()
+        {
+            _recording.RestoreDefaults();
+            Sync();
+        }
+
+        private void Sync()
+        {
+            int front = _inner.FanGroups.Single(fan => fan.Id == FakeHardwareBackend.FrontFanId).DutyCyclePercent ?? 0;
+            int gpu = _inner.FanGroups.Single(fan => fan.Id == FakeHardwareBackend.GpuFanId).DutyCyclePercent ?? 0;
+            _inner.OverrideTemperature(FakeHardwareBackend.CpuSensorId, front >= 90 ? 38 : 45);
+            _inner.OverrideTemperature(FakeHardwareBackend.GpuSensorId, gpu >= 90 ? 36 : 44);
         }
     }
 }
