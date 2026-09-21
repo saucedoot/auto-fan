@@ -1,9 +1,11 @@
 # Direction decisions (second-opinion review)
 
+> **Historical Path A only. Superseded by Path B (2026-09-21).** Do not implement from this file. Product truth is [App.md](App.md) and the Current snapshot in [IMPLEMENTATION.md](IMPLEMENTATION.md).
+
 This file is a rationale memo from the 2026-09-19 review. It is **not** the spec.
 
 - Product truth: [App.md](App.md) — especially **What one Optimize run does** and the first-session guided path
-- What to build now: [IMPLEMENTATION.md](IMPLEMENTATION.md) snapshot (v1.9 shipped; live confirmation missed on GPU)
+- What to build now: [IMPLEMENTATION.md](IMPLEMENTATION.md) Current snapshot
 - Hard limits: [AGENTS.md](AGENTS.md)
 
 Do not implement from this file. Do not revive items in **Dropped**.
