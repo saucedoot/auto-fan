@@ -5,4 +5,5 @@ public sealed record FanTestSample(
     string FanGroupId,
     string FanGroupName,
     FanTestStage Stage,
-    HardwareSnapshot Snapshot);
+    HardwareSnapshot Snapshot,
+    bool Settled = false);

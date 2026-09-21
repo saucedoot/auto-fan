@@ -48,6 +48,12 @@ public sealed class FanTestRunnerTests
         Assert.Contains(run.Skipped, skip => skip.FanGroupId == FakeHardwareBackend.PumpId && skip.Reason == FanTestReasons.Pump);
         Assert.Contains(run.Skipped, skip => skip.FanGroupId == FakeHardwareBackend.AmdGpuFanId && skip.Reason == FanTestReasons.Gpu);
         Assert.DoesNotContain(run.Skipped, skip => skip.FanGroupId == FakeHardwareBackend.GpuFanId);
+        Assert.Contains(run.Samples, sample => sample.Settled);
+        Assert.Contains(
+            run.Influence,
+            entry => entry.FanGroupId == FakeHardwareBackend.FrontFanId
+                && entry.Target == InfluenceTarget.Cpu
+                && entry.Evidence == MetricEvidence.Measured);
         Assert.Contains(
             run.Influence,
             entry => entry.FanGroupId == FakeHardwareBackend.FrontFanId && entry.Target == InfluenceTarget.Cpu);
@@ -303,6 +309,15 @@ public sealed class FanTestRunnerTests
 
         Assert.True(delays >= 8);
         Assert.NotEqual(FanTestRunStatus.Cancelled, run.Status);
+        Assert.DoesNotContain(run.Samples, sample => sample.Settled);
+        Assert.Contains(
+            run.Influence,
+            entry => entry.FanGroupId == FakeHardwareBackend.FrontFanId
+                && entry.Evidence == MetricEvidence.Unknown
+                && entry.SkipReason == FanTestReasons.Unsettled);
+        Assert.DoesNotContain(
+            run.Influence,
+            entry => entry.Evidence == MetricEvidence.Measured && entry.DeltaCelsius is not null);
     }
 
     [Fact]

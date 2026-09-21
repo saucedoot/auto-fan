@@ -190,7 +190,7 @@ public sealed class ScreenOrdererTests
             ],
             [new FanGroup(id, name, duty, rpm, "Demo controller", IsControllable: true)],
             IsDemoHardware: true);
-        return new FanTestSample(at, id, name, stage, snapshot);
+        return new FanTestSample(at, id, name, stage, snapshot, Settled: true);
     }
 
     private static FanTestRun FanTest(IReadOnlyList<InfluenceEntry> influence) =>

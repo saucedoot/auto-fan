@@ -13,9 +13,9 @@ public sealed class FanSpeedCurveBuilderTests
         [
             .. Hold(start, 60, 1265, 59.2, FanTestStage.Reference),
             .. Hold(start.AddMinutes(1), 70, 1466, 60.3, FanTestStage.Perturb),
-            Sample(start.AddMinutes(2), 73, 1500, 72.0, FanTestStage.Screen),
-            Sample(start.AddMinutes(2).AddSeconds(1), 75, 1510, 73.0, FanTestStage.Screen),
-            Sample(start.AddMinutes(2).AddSeconds(2), 78, 1520, 74.0, FanTestStage.Screen),
+            Sample(start.AddMinutes(2), 73, 1500, 72.0, FanTestStage.Screen, settled: false),
+            Sample(start.AddMinutes(2).AddSeconds(1), 75, 1510, 73.0, FanTestStage.Screen, settled: false),
+            Sample(start.AddMinutes(2).AddSeconds(2), 78, 1520, 74.0, FanTestStage.Screen, settled: false),
             .. Hold(start.AddMinutes(3), 100, 1785, 63.7, FanTestStage.Screen),
             .. Hold(start.AddMinutes(4), 85, 1700, 63.0, FanTestStage.Refine),
         ];
@@ -58,17 +58,35 @@ public sealed class FanSpeedCurveBuilderTests
         Assert.Empty(FanSpeedCurveBuilder.Build(null));
     }
 
+    [Fact]
+    public void Build_skips_timeout_holds_even_when_temps_look_flat()
+    {
+        DateTimeOffset start = new(2026, 9, 21, 1, 0, 0, TimeSpan.Zero);
+        FanTestSample[] samples =
+        [
+            .. Hold(start, 70, 1466, 60.3, FanTestStage.Perturb, settled: false),
+            .. Hold(start.AddMinutes(1), 100, 1785, 63.7, FanTestStage.Screen),
+        ];
+
+        IReadOnlyList<FanSpeedCurve> curves = FanSpeedCurveBuilder.Build(samples);
+
+        FanSpeedCurve cpu = Assert.Single(curves, curve => curve.Target == InfluenceTarget.Cpu);
+        Assert.Equal([1785], cpu.Points.Select(static point => point.Rpm).ToArray());
+        Assert.DoesNotContain(cpu.Points, static point => point.Rpm == 1466);
+    }
+
     private static FanTestSample[] Hold(
         DateTimeOffset start,
         int duty,
         double rpm,
         double cpu,
-        FanTestStage stage)
+        FanTestStage stage,
+        bool settled = true)
     {
         var samples = new FanTestSample[ThermalDynamics.SettleWindowSamples];
         for (int index = 0; index < samples.Length; index++)
         {
-            samples[index] = Sample(start.AddSeconds(index), duty, rpm, cpu, stage);
+            samples[index] = Sample(start.AddSeconds(index), duty, rpm, cpu, stage, settled);
         }
 
         return samples;
@@ -79,7 +97,8 @@ public sealed class FanSpeedCurveBuilderTests
         int duty,
         double rpm,
         double cpu,
-        FanTestStage stage) =>
+        FanTestStage stage,
+        bool settled = true) =>
         new(
             at,
             FakeHardwareBackend.FrontFanId,
@@ -100,5 +119,6 @@ public sealed class FanSpeedCurveBuilderTests
                         "Demo controller",
                         IsControllable: true),
                 ],
-                IsDemoHardware: true));
+                IsDemoHardware: true),
+            settled);
 }

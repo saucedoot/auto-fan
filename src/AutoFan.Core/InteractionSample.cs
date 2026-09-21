@@ -7,4 +7,5 @@ public sealed record InteractionSample(
     string SecondGroupId,
     string SecondGroupName,
     InteractionStep Step,
-    HardwareSnapshot Snapshot);
+    HardwareSnapshot Snapshot,
+    bool Settled = false);

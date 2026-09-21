@@ -348,6 +348,7 @@ public sealed class InteractionRunner
         CancellationToken cancellationToken)
     {
         var snapshots = new List<HardwareSnapshot>();
+        int holdStart = samples.Count;
         DateTimeOffset deadline = _clock.GetUtcNow() + _schedule.Timeout;
         while (true)
         {
@@ -378,7 +379,8 @@ public sealed class InteractionRunner
                 second.Id,
                 second.Name,
                 step,
-                snapshot));
+                snapshot,
+                Settled: false));
             snapshots.Add(snapshot);
             progress?.Report(new InteractionProgress(snapshot, message));
 
@@ -387,7 +389,13 @@ public sealed class InteractionRunner
                 return SafetyLimits.Describe(abort, _limits);
             }
 
-            if (TemperatureSettle.RelevantTempsSettled(snapshots) || now >= deadline)
+            if (TemperatureSettle.RelevantTempsSettled(snapshots))
+            {
+                MarkSettled(samples, holdStart);
+                return null;
+            }
+
+            if (now >= deadline)
             {
                 return null;
             }
@@ -422,6 +430,14 @@ public sealed class InteractionRunner
 
     private FanGroup? FindGroup(string id) =>
         _hardware.FanGroups.FirstOrDefault(fan => fan.Id == id);
+
+    private static void MarkSettled(List<InteractionSample> samples, int fromIndex)
+    {
+        for (int index = fromIndex; index < samples.Count; index++)
+        {
+            samples[index] = samples[index] with { Settled = true };
+        }
+    }
 
     private static bool TryTargetDuty(FanGroup group, out int duty, out string? error)
     {

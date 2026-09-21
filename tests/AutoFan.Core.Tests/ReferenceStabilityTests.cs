@@ -180,7 +180,8 @@ public sealed class ReferenceStabilityTests
             FakeHardwareBackend.FrontFanId,
             "Front intake",
             FanTestStage.Reference,
-            SnapshotAt(at, cpu, gpu, duty: 40, rpm: 800));
+            SnapshotAt(at, cpu, gpu, duty: 40, rpm: 800),
+            Settled: true);
 
     private static IReadOnlyList<FanTestSample> Speed(DateTimeOffset start, double cpu, double gpu)
     {
@@ -192,7 +193,8 @@ public sealed class ReferenceStabilityTests
                 FakeHardwareBackend.FrontFanId,
                 "Front intake",
                 FanTestStage.Perturb,
-                SnapshotAt(start.AddSeconds(index), cpu, gpu, duty: 70, rpm: 1400)));
+                SnapshotAt(start.AddSeconds(index), cpu, gpu, duty: 70, rpm: 1400),
+                Settled: true));
         }
 
         return samples;

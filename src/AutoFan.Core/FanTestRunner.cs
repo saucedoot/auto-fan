@@ -425,6 +425,7 @@ public sealed class FanTestRunner
         CancellationToken cancellationToken)
     {
         var snapshots = new List<HardwareSnapshot>();
+        int holdStart = samples.Count;
         DateTimeOffset deadline = _clock.GetUtcNow() + _schedule.Timeout;
         while (true)
         {
@@ -448,7 +449,7 @@ public sealed class FanTestRunner
                 return SafetyLimits.Describe(rise);
             }
 
-            samples.Add(new FanTestSample(now, group.Id, group.Name, stage, snapshot));
+            samples.Add(new FanTestSample(now, group.Id, group.Name, stage, snapshot, Settled: false));
             snapshots.Add(snapshot);
             progress?.Report(new FanTestProgress(
                 group.Id,
@@ -466,7 +467,13 @@ public sealed class FanTestRunner
                 return SafetyLimits.Describe(abort.Value, _limits);
             }
 
-            if (TemperatureSettle.RelevantTempsSettled(snapshots) || now >= deadline)
+            if (TemperatureSettle.RelevantTempsSettled(snapshots))
+            {
+                MarkSettled(samples, holdStart);
+                return null;
+            }
+
+            if (now >= deadline)
             {
                 return null;
             }
@@ -534,6 +541,14 @@ public sealed class FanTestRunner
 
     private FanGroup? FindGroup(string id) =>
         _hardware.FanGroups.FirstOrDefault(fan => fan.Id == id);
+
+    private static void MarkSettled(List<FanTestSample> samples, int fromIndex)
+    {
+        for (int index = fromIndex; index < samples.Count; index++)
+        {
+            samples[index] = samples[index] with { Settled = true };
+        }
+    }
 
     private static bool IsRunAbort(string? error)
     {

@@ -62,13 +62,20 @@ public sealed class SqliteFanTestStoreTests
         DateTimeOffset started = new(2026, 9, 19, 18, 0, 0, TimeSpan.Zero);
         FanTestSample[] samples =
         [
-            new FanTestSample(started, FakeHardwareBackend.FrontFanId, "Front intake", FanTestStage.Reference, snapshot),
+            new FanTestSample(
+                started,
+                FakeHardwareBackend.FrontFanId,
+                "Front intake",
+                FanTestStage.Reference,
+                snapshot,
+                Settled: true),
             new FanTestSample(
                 started.AddSeconds(1),
                 FakeHardwareBackend.FrontFanId,
                 "Front intake",
                 FanTestStage.Perturb,
-                snapshot),
+                snapshot,
+                Settled: false),
         ];
         InfluenceEntry[] influence =
         [
@@ -145,6 +152,8 @@ public sealed class SqliteFanTestStoreTests
         Assert.Equal(expected.Samples.Count, actual.Samples.Count);
         Assert.Equal(expected.Samples[0].FanGroupId, actual.Samples[0].FanGroupId);
         Assert.Equal(expected.Samples[0].Stage, actual.Samples[0].Stage);
+        Assert.Equal(expected.Samples[0].Settled, actual.Samples[0].Settled);
+        Assert.Equal(expected.Samples[1].Settled, actual.Samples[1].Settled);
         Assert.Equal(expected.Influence.Count, actual.Influence.Count);
         Assert.Equal(expected.Influence[0].Effect, actual.Influence[0].Effect);
         Assert.Equal(expected.Influence[0].DeltaCelsius, actual.Influence[0].DeltaCelsius);

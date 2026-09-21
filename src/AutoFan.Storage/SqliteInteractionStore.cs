@@ -67,8 +67,8 @@ public sealed class SqliteInteractionStore : IInteractionStore, IDisposable
                     """
                     INSERT INTO interaction_sample (
                         run_id, captured_utc, first_group_id, first_group_name,
-                        second_group_id, second_group_name, step, snapshot_json)
-                    VALUES ($run, $captured, $first, $firstName, $second, $secondName, $step, $snapshot);
+                        second_group_id, second_group_name, step, snapshot_json, settled)
+                    VALUES ($run, $captured, $first, $firstName, $second, $secondName, $step, $snapshot, $settled);
                     """;
                 command.Parameters.AddWithValue("$run", run.Id.ToString("D"));
                 command.Parameters.AddWithValue("$captured", sample.CapturedAt.ToString("O"));
@@ -78,6 +78,7 @@ public sealed class SqliteInteractionStore : IInteractionStore, IDisposable
                 command.Parameters.AddWithValue("$secondName", sample.SecondGroupName);
                 command.Parameters.AddWithValue("$step", sample.Step.ToString());
                 command.Parameters.AddWithValue("$snapshot", JsonSerializer.Serialize(sample.Snapshot, JsonOptions));
+                command.Parameters.AddWithValue("$settled", sample.Settled ? 1 : 0);
                 command.ExecuteNonQuery();
             }
 
@@ -189,6 +190,7 @@ public sealed class SqliteInteractionStore : IInteractionStore, IDisposable
                 second_group_name TEXT NOT NULL,
                 step TEXT NOT NULL,
                 snapshot_json TEXT NOT NULL,
+                settled INTEGER NOT NULL DEFAULT 0,
                 FOREIGN KEY (run_id) REFERENCES interaction_run(id)
             );
             CREATE TABLE IF NOT EXISTS interaction_entry (
@@ -217,6 +219,27 @@ public sealed class SqliteInteractionStore : IInteractionStore, IDisposable
             );
             """;
         command.ExecuteNonQuery();
+        EnsureColumn("interaction_sample", "settled", "INTEGER NOT NULL DEFAULT 0");
+    }
+
+    private void EnsureColumn(string table, string column, string sqlType)
+    {
+        using (var inspect = _connection.CreateCommand())
+        {
+            inspect.CommandText = $"PRAGMA table_info({table});";
+            using SqliteDataReader reader = inspect.ExecuteReader();
+            while (reader.Read())
+            {
+                if (string.Equals(reader.GetString(1), column, StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+            }
+        }
+
+        using var alter = _connection.CreateCommand();
+        alter.CommandText = $"ALTER TABLE {table} ADD COLUMN {column} {sqlType};";
+        alter.ExecuteNonQuery();
     }
 
     private InteractionRun Load(Guid id)
@@ -248,7 +271,7 @@ public sealed class SqliteInteractionStore : IInteractionStore, IDisposable
             sampleCommand.CommandText =
                 """
                 SELECT captured_utc, first_group_id, first_group_name, second_group_id,
-                       second_group_name, step, snapshot_json
+                       second_group_name, step, snapshot_json, settled
                 FROM interaction_sample WHERE run_id = $id ORDER BY id;
                 """;
             sampleCommand.Parameters.AddWithValue("$id", idText);
@@ -270,7 +293,8 @@ public sealed class SqliteInteractionStore : IInteractionStore, IDisposable
                     reader.GetString(3),
                     reader.GetString(4),
                     Enum.Parse<InteractionStep>(reader.GetString(5)),
-                    snapshot));
+                    snapshot,
+                    reader.GetInt32(7) != 0));
             }
         }
 

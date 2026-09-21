@@ -233,7 +233,8 @@ public sealed class InfluenceMapBuilderTests
         double vrm,
         double? caseTemp,
         int duty = 40,
-        double rpm = 800)
+        double rpm = 800,
+        bool settled = true)
     {
         var sensors = new List<SensorReading>
         {
@@ -253,7 +254,7 @@ public sealed class InfluenceMapBuilderTests
                 new FanGroup(id, name, duty, rpm, "Demo controller", IsControllable: true),
             ],
             IsDemoHardware: true);
-        return new FanTestSample(at, id, name, stage, snapshot);
+        return new FanTestSample(at, id, name, stage, snapshot, settled);
     }
 
     [Fact]
@@ -294,6 +295,58 @@ public sealed class InfluenceMapBuilderTests
         Assert.Equal(3360, gpu.RpmAfter);
     }
 
+    [Fact]
+    public void Build_marks_unsettled_holds_unknown_even_when_temps_moved()
+    {
+        DateTimeOffset start = new(2026, 9, 21, 1, 0, 0, TimeSpan.Zero);
+        string id = FakeHardwareBackend.FrontFanId;
+        FanTestSample[] samples =
+        [
+            Sample(start, id, "Front intake", FanTestStage.Reference, 70, 72, 60, 45, duty: 30, rpm: 1130, settled: false),
+            .. SpeedCopies(
+                start.AddSeconds(10),
+                id,
+                "Front intake",
+                64,
+                60,
+                59,
+                44,
+                duty: 85,
+                rpm: 3360,
+                settled: false),
+        ];
+
+        IReadOnlyList<InfluenceEntry> map = InfluenceMapBuilder.Build(samples);
+        Assert.All(
+            map.Where(entry => entry.FanGroupId == id),
+            entry =>
+            {
+                Assert.Equal(MetricEvidence.Unknown, entry.Evidence);
+                Assert.Null(entry.DeltaCelsius);
+                Assert.Equal(FanTestReasons.Unsettled, entry.SkipReason);
+            });
+    }
+
+    [Fact]
+    public void Build_uses_only_settled_holds_for_measured_delta()
+    {
+        DateTimeOffset start = new(2026, 9, 21, 1, 0, 0, TimeSpan.Zero);
+        string id = FakeHardwareBackend.FrontFanId;
+        FanTestSample[] samples =
+        [
+            Sample(start, id, "Front intake", FanTestStage.Reference, 70, 72, 60, 45, duty: 30, rpm: 1130),
+            .. SpeedCopies(start.AddSeconds(10), id, "Front intake", 60, 55, 59, 44, duty: 40, rpm: 1200, settled: false),
+            .. SpeedCopies(start.AddSeconds(40), id, "Front intake", 68, 68, 59, 44, duty: 85, rpm: 3360),
+        ];
+
+        IReadOnlyList<InfluenceEntry> map = InfluenceMapBuilder.Build(samples);
+        InfluenceEntry gpu = map.Single(entry => entry.FanGroupId == id && entry.Target == InfluenceTarget.Gpu);
+        Assert.Equal(MetricEvidence.Measured, gpu.Evidence);
+        Assert.Equal(4.0, gpu.DeltaCelsius ?? 0, 1);
+        Assert.Equal(85, gpu.DutyAfter);
+        Assert.Equal(3360, gpu.RpmAfter);
+    }
+
     private static IReadOnlyList<FanTestSample> SpeedCopies(
         DateTimeOffset start,
         string id,
@@ -303,7 +356,8 @@ public sealed class InfluenceMapBuilderTests
         double vrm,
         double? caseTemp,
         int duty,
-        double rpm)
+        double rpm,
+        bool settled = true)
     {
         var samples = new List<FanTestSample>(ThermalDynamics.SettleWindowSamples);
         for (int index = 0; index < ThermalDynamics.SettleWindowSamples; index++)
@@ -318,7 +372,8 @@ public sealed class InfluenceMapBuilderTests
                 vrm,
                 caseTemp,
                 duty,
-                rpm));
+                rpm,
+                settled));
         }
 
         return samples;

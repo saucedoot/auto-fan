@@ -63,7 +63,8 @@ public sealed class SqliteInteractionStoreTests
                 FakeHardwareBackend.TopFanId,
                 "Top exhaust",
                 InteractionStep.ReferenceFirst,
-                snapshot),
+                snapshot,
+                Settled: true),
         ];
         InteractionEntry[] effects =
         [
@@ -116,5 +117,6 @@ public sealed class SqliteInteractionStoreTests
         Assert.Equal(expected.Effects[1].Evidence, actual.Effects[1].Evidence);
         Assert.Equal(expected.Skipped[0].Reason, actual.Skipped[0].Reason);
         Assert.Equal(expected.Samples[0].Step, actual.Samples[0].Step);
+        Assert.Equal(expected.Samples[0].Settled, actual.Samples[0].Settled);
     }
 }

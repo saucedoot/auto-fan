@@ -24,13 +24,27 @@ public static class InfluenceMapBuilder
                 .ToArray();
             string groupName = groupSamples[0].FanGroupName;
             IReadOnlyList<FanTestSample> reference = groupSamples
-                .Where(sample => sample.Stage == FanTestStage.Reference)
+                .Where(sample => sample.Stage == FanTestStage.Reference && sample.Settled)
                 .ToArray();
             IReadOnlyList<FanTestSample> speeds = groupSamples
-                .Where(sample => IsSpeedStage(sample.Stage) && !IsStalled(sample, groupId))
+                .Where(sample => IsSpeedStage(sample.Stage) && sample.Settled && !IsStalled(sample, groupId))
                 .ToArray();
             if (reference.Count == 0 || speeds.Count == 0)
             {
+                if (HasUnsettledEvidence(groupSamples, groupId))
+                {
+                    FanGroup? observed = FirstGroup(
+                        groupSamples.Where(sample => sample.Stage == FanTestStage.Reference).ToArray(),
+                        groupId)
+                        ?? FirstGroup(groupSamples, groupId);
+                    entries.AddRange(UnknownForGroup(
+                        groupId,
+                        groupName,
+                        FanTestReasons.Unsettled,
+                        observed?.DutyCyclePercent,
+                        observed?.Rpm));
+                }
+
                 continue;
             }
 
@@ -308,6 +322,25 @@ public static class InfluenceMapBuilder
         }
 
         return buckets.Select(static bucket => (IReadOnlyList<FanTestSample>)bucket.Samples).ToArray();
+    }
+
+    private static bool HasUnsettledEvidence(IReadOnlyList<FanTestSample> samples, string groupId)
+    {
+        bool hasReference = false;
+        bool hasSpeeds = false;
+        foreach (FanTestSample sample in samples)
+        {
+            if (sample.Stage == FanTestStage.Reference)
+            {
+                hasReference = true;
+            }
+            else if (IsSpeedStage(sample.Stage) && !IsStalled(sample, groupId))
+            {
+                hasSpeeds = true;
+            }
+        }
+
+        return hasReference && hasSpeeds;
     }
 
     private static bool IsStalled(FanTestSample sample, string groupId)

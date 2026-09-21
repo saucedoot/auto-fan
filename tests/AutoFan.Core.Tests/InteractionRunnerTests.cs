@@ -38,6 +38,7 @@ public sealed class InteractionRunnerTests
         Assert.Contains(run.Skipped, skip => skip.FanGroupId == FakeHardwareBackend.AmdGpuFanId && skip.Reason == FanTestReasons.Gpu);
         Assert.Contains(run.Skipped, skip => skip.FanGroupId == FakeHardwareBackend.FrontFanId && skip.Reason == FanTestReasons.NoRpm);
         Assert.Contains(run.Effects, entry => entry.Target == InfluenceTarget.Cpu && entry.Evidence != MetricEvidence.Inferred);
+        Assert.Contains(run.Samples, sample => sample.Settled);
         Assert.True(HasAloneThenCombined(hardware.Events));
         Assert.Same(run, store.GetLatest());
     }
@@ -134,6 +135,39 @@ public sealed class InteractionRunnerTests
         Assert.Equal(FanTestRunStatus.Cancelled, run.Status);
         Assert.True(workload.StopCount >= 1);
         Assert.Contains(hardware.Events, item => item == "restore");
+    }
+
+    [Fact]
+    public async Task Run_timeout_holds_are_not_measured()
+    {
+        var inner = new FakeHardwareBackend();
+        var store = new InMemoryInteractionStore();
+        var clock = new ManualTimeProvider();
+        int delays = 0;
+        var runner = new InteractionRunner(
+            inner,
+            new FakeWorkloadActuator(),
+            new FixedCompetingSoftwareScanner(),
+            store,
+            clock,
+            new FanTestSchedule(TimeSpan.FromSeconds(8), TimeSpan.FromSeconds(1)),
+            (span, token) =>
+            {
+                token.ThrowIfCancellationRequested();
+                clock.Advance(span);
+                delays++;
+                inner.OverrideTemperature(FakeHardwareBackend.CpuSensorId, 50 + (delays * 0.4));
+                return Task.CompletedTask;
+            });
+
+        InteractionRun run = await runner.RunAsync(influence: PairInfluence());
+
+        Assert.True(delays >= 8);
+        Assert.NotEqual(FanTestRunStatus.Cancelled, run.Status);
+        Assert.DoesNotContain(run.Samples, sample => sample.Settled);
+        Assert.DoesNotContain(
+            run.Effects,
+            entry => entry.Evidence == MetricEvidence.Measured && entry.ResidualCelsius is not null);
     }
 
     private static bool HasAloneThenCombined(IReadOnlyList<string> events)
