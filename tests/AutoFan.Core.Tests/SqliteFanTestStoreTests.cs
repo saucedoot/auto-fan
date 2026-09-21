@@ -75,7 +75,8 @@ public sealed class SqliteFanTestStoreTests
                 "Front intake",
                 FanTestStage.Perturb,
                 snapshot,
-                Settled: false),
+                Settled: false,
+                HeatId: HeatId.Everyday),
         ];
         InfluenceEntry[] influence =
         [
@@ -153,7 +154,9 @@ public sealed class SqliteFanTestStoreTests
         Assert.Equal(expected.Samples[0].FanGroupId, actual.Samples[0].FanGroupId);
         Assert.Equal(expected.Samples[0].Stage, actual.Samples[0].Stage);
         Assert.Equal(expected.Samples[0].Settled, actual.Samples[0].Settled);
+        Assert.Equal(expected.Samples[0].HeatId, actual.Samples[0].HeatId);
         Assert.Equal(expected.Samples[1].Settled, actual.Samples[1].Settled);
+        Assert.Equal(expected.Samples[1].HeatId, actual.Samples[1].HeatId);
         Assert.Equal(expected.Influence.Count, actual.Influence.Count);
         Assert.Equal(expected.Influence[0].Effect, actual.Influence[0].Effect);
         Assert.Equal(expected.Influence[0].DeltaCelsius, actual.Influence[0].DeltaCelsius);

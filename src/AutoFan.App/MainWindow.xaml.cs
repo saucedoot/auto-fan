@@ -110,6 +110,8 @@ public partial class MainWindow : Window
 
     private HeatProfile? StoredLowHeat() => _baselineStore.GetLatest()?.LowProfile;
 
+    private HeatProfile? StoredEverydayHeat() => _baselineStore.GetLatest()?.EverydayProfile;
+
     private async void OnRunBaseline(object sender, RoutedEventArgs e)
     {
         if (_viewModel.IsBaselineRunning
@@ -169,7 +171,10 @@ public partial class MainWindow : Window
             presence: CurrentPresence(),
             gpuHeatUseful: GpuHeat.IsUseful(_baselineStore.GetLatest()),
             stability: ReferenceStability.FromBaseline(_baselineStore.GetLatest()),
-            lowHeat: StoredLowHeat());
+            lowHeat: StoredLowHeat(),
+            everydayHeat: StoredEverydayHeat(),
+            everydayGpuHeatUseful: GpuHeat.EverydayIsUseful(_baselineStore.GetLatest()),
+            baseline: _baselineStore.GetLatest());
 
         try
         {
@@ -519,7 +524,10 @@ public partial class MainWindow : Window
                     presence: CurrentPresence(),
                     gpuHeatUseful: GpuHeat.IsUseful(_baselineStore.GetLatest()),
                     stability: ReferenceStability.FromBaseline(_baselineStore.GetLatest()),
-                    lowHeat: StoredLowHeat())
+                    lowHeat: StoredLowHeat(),
+                    everydayHeat: StoredEverydayHeat(),
+                    everydayGpuHeatUseful: GpuHeat.EverydayIsUseful(_baselineStore.GetLatest()),
+                    baseline: _baselineStore.GetLatest())
                 .RunAsync(
                     token,
                     new Progress<FanTestProgress>(update => ReportWalk(update.Message)))

@@ -105,6 +105,18 @@ public sealed class SyntheticWorkloadActuator : IWorkloadActuator
         }
     }
 
+    public void ApplyEveryday(HeatProfile profile)
+    {
+        lock (_gate)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            _lockedEveryday = profile;
+            _cpu.SetWorkers(profile.CpuWorkers);
+            _gpu?.Set(profile);
+            _level = WorkloadLevel.Everyday;
+        }
+    }
+
     public void Stop()
     {
         lock (_gate)

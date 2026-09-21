@@ -66,8 +66,8 @@ public sealed class SqliteFanTestStore : IFanTestStore, IDisposable
                 command.CommandText =
                     """
                     INSERT INTO fan_test_sample (
-                        run_id, captured_utc, fan_group_id, fan_group_name, stage, snapshot_json, settled)
-                    VALUES ($run, $captured, $group, $name, $stage, $snapshot, $settled);
+                        run_id, captured_utc, fan_group_id, fan_group_name, stage, snapshot_json, settled, heat_id)
+                    VALUES ($run, $captured, $group, $name, $stage, $snapshot, $settled, $heat);
                     """;
                 command.Parameters.AddWithValue("$run", run.Id.ToString("D"));
                 command.Parameters.AddWithValue("$captured", sample.CapturedAt.ToString("O"));
@@ -76,6 +76,7 @@ public sealed class SqliteFanTestStore : IFanTestStore, IDisposable
                 command.Parameters.AddWithValue("$stage", sample.Stage.ToString());
                 command.Parameters.AddWithValue("$snapshot", JsonSerializer.Serialize(sample.Snapshot, JsonOptions));
                 command.Parameters.AddWithValue("$settled", sample.Settled ? 1 : 0);
+                command.Parameters.AddWithValue("$heat", sample.HeatId.ToString());
                 command.ExecuteNonQuery();
             }
 
@@ -215,6 +216,7 @@ public sealed class SqliteFanTestStore : IFanTestStore, IDisposable
             """;
         command.ExecuteNonQuery();
         EnsureColumn("fan_test_sample", "settled", "INTEGER NOT NULL DEFAULT 0");
+        EnsureColumn("fan_test_sample", "heat_id", "TEXT NOT NULL DEFAULT 'Low'");
     }
 
     private void EnsureColumn(string table, string column, string sqlType)
@@ -265,7 +267,7 @@ public sealed class SqliteFanTestStore : IFanTestStore, IDisposable
         {
             sampleCommand.CommandText =
                 """
-                SELECT captured_utc, fan_group_id, fan_group_name, stage, snapshot_json, settled
+                SELECT captured_utc, fan_group_id, fan_group_name, stage, snapshot_json, settled, heat_id
                 FROM fan_test_sample WHERE run_id = $id ORDER BY id;
                 """;
             sampleCommand.Parameters.AddWithValue("$id", idText);
@@ -290,7 +292,8 @@ public sealed class SqliteFanTestStore : IFanTestStore, IDisposable
                     groupName,
                     stage,
                     snapshot,
-                    reader.GetInt32(5) != 0));
+                    reader.GetInt32(5) != 0,
+                    ParseHeatId(reader)));
             }
         }
 
@@ -342,6 +345,17 @@ public sealed class SqliteFanTestStore : IFanTestStore, IDisposable
         }
 
         return new FanTestRun(id, started, finished, status, abort, gpu, samples, influence, skipped);
+    }
+
+    private static HeatId ParseHeatId(SqliteDataReader reader)
+    {
+        if (reader.FieldCount <= 6 || reader.IsDBNull(6))
+        {
+            return HeatId.Low;
+        }
+
+        string text = reader.GetString(6);
+        return Enum.TryParse(text, out HeatId heatId) ? heatId : HeatId.Low;
     }
 
     private static DateTimeOffset ParseTime(string value) =>

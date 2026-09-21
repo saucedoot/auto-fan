@@ -8,6 +8,10 @@ public sealed record FanTestSchedule(TimeSpan Timeout, TimeSpan SamplePeriod)
 
     public static readonly int[] RefineDuties = [20, 40, 50, 70, 85];
 
+    public static readonly int[] EverydayScreenDuties = [20, 40, 70, 100];
+
+    public static readonly int[] EverydayRefineDuties = [55, 85];
+
     public static FanTestSchedule Default { get; } = new(
         TimeSpan.FromSeconds(90),
         TimeSpan.FromSeconds(1));
