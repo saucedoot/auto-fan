@@ -22,39 +22,49 @@ The result is that finding an actually good fan configuration can require hours 
 
 ## The Product
 
-**The app automatically tests, models, and optimizes the cooling system of a user's PC.**
+**The app automatically measures this PC's cooling system, then builds real multi-point fan curves from data.**
 
-Instead of asking the user to manually create fan curves, the application answers:
+Instead of asking the user to manually draw fan curves by trial and error, AUTO Fan:
 
-> **"Given this exact computer, what is the most efficient way to move heat through this case while balancing temperature, noise, and responsiveness?"**
+1. Locks in repeatable heat
+2. Tests which fans actually affect which temperatures
+3. Builds temperature → duty fan curves from those measurements
+4. Shows the user **editable curves** and **what we learned** (the evidence)
 
-The user installs the app, gets this PC ready, chooses quiet versus cool, and starts one Optimize.
+> **"Like FanControl or similar curve editors, but the first draft is automatic — and you see the data behind it."**
 
-The first session is a **guided sequence**, not a toolbox. Each step should lead to the next: this PC is ready → which headers actually have fans → quiet versus cool → Optimize (a walk: watch this PC, then test fans, then hold). The user should not have to open Advanced or run pieces by hand.
+The user installs the app, gets this PC ready, and starts one **Optimize**.
 
-The app then performs controlled testing, learns the thermal behavior of the system, and creates personalized fan-control policies automatically.
+The first session is a **guided sequence**, not a toolbox. Each step should lead to the next: this PC is ready → which headers actually have fans → Optimize (a walk: watch this PC, then test fans, then hold). The user should not have to open Advanced or run pieces by hand.
 
-The user does not need to understand airflow theory or spend hours tweaking curves.
+The app performs controlled testing, learns the thermal behavior of the system, and presents **editable fan curves** on the Home screen. The curves are computed to be the quietest configuration that meets cooling requirements, but the user can adjust them if desired.
 
-If they cancel mid-test, they still get whatever the software has already learned — a partial map and a conservative policy — not a blank result.
+A **Quiet ↔ Cool** slider helps set the initial balance, but it becomes secondary once the curves are visible — users who want manual control can tweak the curves directly.
+
+The user does not need to understand airflow theory or spend hours testing by hand. If they cancel mid-test, they still get whatever the software has already learned — a partial map and a conservative policy — not a blank result.
 
 ## What Makes This Different
 
-Traditional fan-control software is primarily a **control interface**.
+Traditional fan-curve editors (FanControl, Armoury Crate, iCUE, etc.) require the user to draw curves by hand, then test them manually.
 
-This product is an **optimization and discovery system**.
+AUTO Fan is a **measurement-driven curve builder**.
 
 Traditional approach:
 
-> Temperature → Fan Speed
+> User guesses temperature → duty curve → user manually tests → user iterates
 
-Our approach:
+AUTO Fan approach:
 
-> Hardware + Case + Workload + Measured Thermal Response → Learned Cooling Model → Optimized Fan Strategy
+> Lock repeatable heat → Measure fan effects → Build temperature → duty curves from data → Show curves + evidence → User may adjust
 
-The key idea is that the software does not assume what the fans should do.
+The key difference is that the software does not assume what the fans should do.
 
-It **measures what they actually do.**
+It **measures what they actually do on this PC**, then builds curves from those measurements.
+
+The result is visible on the **Home** screen:
+
+* **Editable fan-curve graphs** (temperature → duty for each controllable fan group)
+* **What we learned** — readable visualized evidence (which fans moved which temperatures, by how much, and where diminishing returns set in)
 
 AUTO Fan is not validated until a real PC shows a repeatable BIOS → AUTO → BIOS result on the same locked heat, where AUTO is cooler at similar fan effort or about as warm at less fan effort, and returning to BIOS reproduces the first BIOS reading above this PC’s measured wander. That comparison is the acceptance bar. It is not built yet. Isolated GPU mapping is the next proof after Watch can say whether GPU temperatures are steady.
 
@@ -64,20 +74,20 @@ AUTO Fan is not validated until a real PC shows a repeatable BIOS → AUTO → B
 
 ## What one Optimize run does
 
-One **Optimize** action is a single characterization of this PC, then a policy. It is not a new experiment tour for every activity (gaming, rendering, idle).
+One **Optimize** action measures this PC, then builds temperature → duty fan curves from the data. It is not a new experiment tour for every activity (gaming, rendering, idle).
 
 1. Discover hardware. Confirm this PC can talk to motherboard sensors, then find which writable headers actually have a fan (set each to 100%; a header is connected if it has RPM). NVIDIA GPU fans on one card are probed once — they move together. The unit of every later test is a **writable fan group that reports RPM** — a motherboard header or the NVIDIA fans on one card, not each physical fan on a hub, not each GPU fan, and not pumps or AMD/Intel GPU fans. Empty headers stay out of the way. NVIDIA GPU fans are written through NVAPI and restored to the driver curve. AMD and Intel GPU fans are not written.
-2. **Optimize** opens a walk window. Quiet–Cool stays on Home. The user starts **Watch this PC** (baseline, no fan writes), then **Test fans** (screen and refine, then pairs only if those individual tests finished), then **Hold**. Each step asks before the next test starts. An aborted Watch, empty fan tests, a lost temperature sensor, or a GPU reset stay on that step for retry — they are not Continue.
+2. **Optimize** opens a walk window. The user starts **Watch this PC** (baseline, no fan writes), then **Test fans** (screen and refine, then pairs only if those individual tests finished), then **Hold**. Each step asks before the next test starts. An aborted Watch, empty fan tests, a lost temperature sensor, or a GPU reset stay on that step for retry — they are not Continue.
 3. Observe a baseline without changing fans: idle, a lighter everyday heat, then a stronger heat used later for fan tests. Watch may raise GPU work per frame (still ~60 Hz, not more frames per second) until GPU Core is about **15 °C above idle**, then **freezes** that workload. Stronger heat keeps the everyday CPU load. After the load is frozen, still on BIOS/driver fans, settle and measure that same condition **three times**. Label each of CPU and GPU Core **STABLE / DRIFTING / NOISY / UNAVAILABLE**. Do not stop the whole Optimize because one sensor is bad. A temperature change smaller than that sensor’s minimum detectable effect is **no effect**. Do not characterize a target that is not STABLE. If GPU Core does not rise that far, Watch may still finish; GPU cooling stays **Unknown** and NVIDIA GPU fans are not written for mapping. Recorded settle times here are a baseline metric. They are not the wait used when fans are later moved. Do not add an all-core High pass, or extra CPU threads, that hit the abort on this class of PC. Repeating the **BIOS control** is required. Do not re-run every fan speed to copy the same perturb.
 4. Wait until the relevant temperatures have **stopped moving**, with a timeout and hard abort ceilings. Do not use a fixed kitchen-timer dwell.
 5. **Screen** each writable group at a few coarse speeds. Skip stalled fans (commanded duty but 0 RPM or no tach match), empty 0 RPM headers, pumps, and AMD/Intel GPU fans. Skip NVIDIA GPU fans for mapping when Watch did not raise GPU Core enough. Drop stalled points; do not fit a curve through them.
 6. **Refine** only the groups that actually moved a temperature: a few more speeds in the useful range. Stop with the 1 °C plateau rule in section 8. CPU-target measurements still count even when GPU cooling is Unknown.
 7. Test a few **pairs** among groups that affected the same sensor, including slight effects — not only the strongest fans, and not the first headers the motherboard listed. Pairs run only if screen and refine **finished**. A thermal abort, cancel, or the 30-minute cap during individual tests with a partial map skips pairs; pair knowledge stays Unknown; the user may Continue to Hold. Do not start pairs after a thermal abort in refine.
-8. Fit a simple model of this machine (individual effects plus measured pair leftovers). The result is a Quiet–Cool **policy** from heat and power, not a bag of RPM setpoints. RPM is what we read and the noise proxy; duty / NVAPI is what we write.
-9. Pick a policy from the Quiet–Cool slider and any optional temperature targets. Noise is **RPM** unless a real sound meter exists.
-10. **Confirm once:** apply that setting, wait until temperatures settle, and compare to the prediction. If it misses, add a little airflow and say the check failed. A miss does not make GPU policy trusted. A predicted GPU temperature below idle, or a plunge below an already-cool start, is not a cooling measurement. Do not search every three-fan combination. Confirmation still runs if Hold applies a setting after skipped pairs.
-11. If the user cancels, or fan tests stop after some groups were measured, keep those results and a conservative quieter policy from them. Pair tests that abort before a combined reading do not add a pair map and are not retried; Hold and confirmation may still use the individual map. Confirmation only happens if Hold actually applies a setting.
-12. Afterward, if the PC runs hotter than the test load, the live policy may move toward its already-computed cool end. It does not start louder just because the tests were at a low heat.
+8. Fit a simple model of this machine (individual effects plus measured pair leftovers). Build **temperature → duty fan curves** from the measured data — one curve per fan group, showing how duty should respond to CPU or GPU temperature. The app computes the **quietest curves** that meet cooling requirements (using the Quiet–Cool slider and any optional temperature targets as guidance). Noise is **RPM** unless a real sound meter exists.
+9. Show the user **editable fan curves** and **what we learned** on the Home screen. The user may adjust curves manually if desired. The Quiet–Cool slider can regenerate curves at different priorities, but manual editing takes precedence.
+10. **Confirm once:** apply the generated curves, wait until temperatures settle, and compare to the prediction. If it misses, add a little airflow and say the check failed. A miss does not make GPU policy trusted. A predicted GPU temperature below idle, or a plunge below an already-cool start, is not a cooling measurement. Do not search every three-fan combination. Confirmation still runs if Hold applies a setting after skipped pairs.
+11. If the user cancels, or fan tests stop after some groups were measured, keep those results and build conservative quieter curves from them. Pair tests that abort before a combined reading do not add a pair map and are not retried; Hold and confirmation may still use the individual map. Confirmation only happens if Hold actually applies a setting.
+12. Afterward, if the PC runs hotter than the test load, the live control may move along the already-generated curves toward higher duty. The curves are not regenerated louder just because the tests were at a low heat.
 
 Abort if any monitored temperature hits a hard ceiling, a needed temperature reading disappears, the GPU resets, or temperature rises unexpectedly fast **near that ceiling** (within 5 °C). Never loosen those ceilings (CPU 90 °C / GPU 83 °C / other 95 °C). Optional CPU/GPU “stop test at” fields may only stop sooner. A modern CPU can jump several degrees in one second in the middle of the range; that is not the same as a runaway into 90 °C. Use the highest **stable** experiment heat: everyday CPU workers plus the frozen GPU work from Watch. Do not run a High pass or a heavier CPU thread count that we already know will abort. Do not change the heater during fan tests to hold a temperature.
 
@@ -489,58 +499,58 @@ The system periodically **confirms** the current policy and watches for drift (d
 
 The user experience should be extremely simple. Home is the path. Advanced is optional retry, not the first session.
 
-They should not have to understand:
+They should not have to:
 
-* hysteresis
-* PID controllers
-* thermal time constants
-* pressure theory
-* airflow coefficients
-* fan response curves
-* optimization algorithms
-* experiment design
+* Manually test each fan at different speeds
+* Draw curves by hand and iterate
+* Understand hysteresis, PID controllers, or thermal time constants
+* Guess which fans matter for which components
+* Spend hours tweaking and re-testing
 
-They should be able to say:
+They should be able to:
 
-> **"Make my PC as quiet as possible while keeping temperatures under control."**
-
-Then press:
-
-**Optimize**
+1. Press **Optimize**
+2. Let the app measure their PC
+3. Review **editable fan curves** and **what we learned** on the Home screen
+4. Adjust curves only if they want to
 
 A walk window asks them to watch this PC, then test fans, then hold. Each step waits for them. If Watch hits a temperature stop, or fan tests finish with nothing measured, or a needed temperature disappears, or the GPU resets, that step is retry — not the next page. If they stop it early after some fans were measured, or individual tests hit a temperature limit with a partial map, pair tests are skipped and they still get a usable quieter/safer policy from whatever finished. Confirmation still runs if Hold applies that setting. A finished Watch plus a partial fan map is not the same as a confirmed policy.
 
-At the end, it delivers a personalized cooling strategy based on the behavior of that actual machine. Motherboard fans return to BIOS and NVIDIA fans return to the driver curve on Stop, close, abort, or crash.
+At the end, the Home screen shows:
+
+* **Editable fan-curve graphs** (temperature → duty) for each controllable fan group
+* **What we learned** — which fans moved which temperatures, measured RPM → settled temperature data, and where diminishing returns set in
+* A **Quiet ↔ Cool** slider that can regenerate curves at different priorities (secondary to manual curve editing)
+
+The curves are the quietest configuration that meets cooling requirements, but the user may tweak them. Motherboard fans return to BIOS and NVIDIA fans return to the driver curve on Stop, close, abort, or crash.
 
 ---
 
 # What This Product Really Is
 
-The product is not fundamentally a fan-control application.
+The product is a **fan-curve utility that does the measurement work for you**.
 
 It is:
 
-> **An automated thermal diagnostic, experimentation, and optimization platform for PCs.**
+> **An automated thermal testing system that builds real multi-point fan curves from data.**
 
-Fan control is simply the mechanism through which it acts on the system.
+The core value is the ability to:
 
-The core intellectual property is the ability to:
+1. Observe a PC under repeatable heat.
+2. Safely test individual fans and combinations.
+3. Measure the thermal response to each fan speed.
+4. Learn which fans matter for which temperatures.
+5. Discover interactions and diminishing returns.
+6. Build temperature → duty curves from those measurements.
+7. Show the user **editable curves** and **what we learned** (the evidence).
+8. Continuously adapt when conditions change — by confirming and correcting, not by re-testing everything.
 
-1. Observe a PC.
-2. Safely perturb its cooling system.
-3. Measure the thermal response.
-4. Learn relationships between fans, workloads, and temperatures.
-5. Discover interactions and inefficiencies.
-6. Build a thermal model of that specific machine.
-7. Optimize cooling, noise, and responsiveness simultaneously.
-8. Continuously adapt the result as the system changes — by confirming and correcting, not by re-testing everything.
-
-That is what turns the product from **"another fan curve utility"** into something meaningfully different.
+The difference from traditional curve editors is that AUTO Fan **measures first, then generates curves**, rather than asking the user to draw and test manually.
 
 ## The Core Promise
 
-**Install it. Let it test your PC. It figures out how your cooling system actually works, then controls it accordingly.**
+**Install it. Optimize. Get solid fan curves from measured data. Tweak them only if you want.**
 
-The user's job becomes choosing their priorities.
+The user's job is deciding how much they want to adjust the generated curves.
 
-The software's job becomes figuring out the rest.
+The software's job is doing the measurement and building the first draft.

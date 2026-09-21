@@ -8,7 +8,7 @@
 - This file — stack, layout, commands, and hard limits.
 
 ## What this project is
-AUTO Fan is a Windows desktop app for PC enthusiasts. It measures how a specific machine’s fans actually affect temperatures, then builds a personalized cooling strategy (quiet vs cool, by workload) instead of asking the user to draw fan curves by hand.
+AUTO Fan is a Windows desktop app for PC enthusiasts. It measures how a specific machine's fans actually affect temperatures, then builds real multi-point temperature → duty fan curves from data. Like FanControl or similar editors, but the first draft is automatic — and you see the measurement evidence behind it.
 
 ## Stack
 - Language(s): C# 14 / .NET 10 (Windows, `net10.0-windows`)
