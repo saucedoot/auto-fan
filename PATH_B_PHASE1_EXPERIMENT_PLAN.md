@@ -315,15 +315,13 @@ When Phase 1 data exists: Home shows per-group XY (temp → duty) **seeded from 
 
 ---
 
-## G. Open risks / questions for Danny
+## G. Direction locks (Danny 2026-09-21)
 
-Only items that change the plan if answered differently:
+These were open questions. They are **locked**. Slice order in E does not need another design pass.
 
-1. **Wall-clock:** First Optimize may run **~25–40 minutes** with two heats, still restoring after every hold, still aborting at 90/83. Is that acceptable, or must Everyday probes be optional/Advanced-only so the default walk stays near today’s ~15 min?  
-2. **After a thermal abort at Low:** This plan **skips Everyday and pairs** and may Hold the partial Low map. Prefer instead to still take Everyday (cooler lamp) on Continue?  
-3. **Phase 1 Hold:** Keep today’s two-end policy after tests (recommended), vs Hold BIOS until Phase 2 (safer, worse UX)?
-
-If those three are answered, the slice order in E does not need another design pass.
+1. **Wall-clock:** **Yes.** A ~25–40 minute first Optimize is acceptable. Restore after every hold. Abort floors stay 90/83. Everyday probes stay in the default walk (not Advanced-only).
+2. **After a thermal abort at Low:** **Yes — skip Everyday and pairs.** May Hold the quieter conservative two-end policy from the partial Low map. Confirmation still runs if Hold applies. Do not start Everyday after a thermal abort in Low.
+3. **Phase 1 Hold:** **Keep today’s two-end Quiet–Cool policy.** Do not sit on BIOS until Phase 2. Do not apply temp→duty curves live in Phase 1.
 
 ---
 
