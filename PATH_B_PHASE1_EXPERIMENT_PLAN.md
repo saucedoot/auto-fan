@@ -12,25 +12,23 @@ Abort floors stay **CPU 90 °C / GPU 83 °C / other 95 °C**. Restore-on-exit st
 
 ## Locked (Danny 2026-09-21) — do not reopen in a later slice
 
-These replace the earlier “Option 3 / two frozen lamps / coarse 20-40-70-100 everywhere / gap-fill deferred” recommendation.
+These replace the earlier “Option 3 / two frozen lamps / coarse 20-40-70-100 everywhere” recommendation. Adaptive duty gap-fill is **not** in this locked list (optional Later only).
 
 1. **Heat ladder:** Idle (BIOS observe) → Everyday → Low → **Hot**.
-   - **Hot** = realistic / game-render-like, hotter than Low. Calibrate-then-freeze like Low. Hard stop ~8 °C under abort (CPU 82 / GPU 75). Prefer more GPU work-per-frame, **not** all-core High (CPU workers stay Everyday).
-   - If Hot cannot separate enough °C from Low → **skip Hot**; that band is **Unknown** (do not invent). Default skip rule: after a capped calibration, if neither preferred CPU nor preferred GPU (when present) is **≥ 5 °C** above that sensor’s Low BIOS-settled temp, skip the Hot stage.
+   - **Hot** = realistic / game-render-like, hotter than Low. Calibrate-then-freeze like Low. Hard stop ~8 °C under abort (CPU 90 / GPU 83 → **~82 / 75**). Prefer more GPU work-per-frame, **not** all-core High (CPU workers stay Everyday).
+   - If Hot cannot separate enough °C from Low → **skip Hot**; that band is **Unknown** (do not invent temperatures). **PLAN DEFAULT (confirm, not a locked °C):** after a capped calibration, if neither preferred CPU nor preferred GPU (when present) is **≥ 5 °C** above that sensor’s Low BIOS-settled temp, skip the Hot stage.
 2. **Below-BIOS duties:** **required.** Absolute duty grid, loud-first then quiet; restore every hold; stall / 0 RPM = skip (not fitted).
 3. **Denser duty grid:**
    - **Low + Hot:** screen **15 / 30 / 45 / 60 / 75 / 90 / 100**; refine (movers only) **20 / 40 / 50 / 70 / 85**.
    - **Everyday:** keep coarser **20 / 40 / 70 / 100** + refine **55 / 85**.
-4. **Adaptive gap-fill:** **in scope for Phase 1** (not deferred). After the base grid’s Measured points exist at a heat, if the gap between two adjacent Measured duties is huge, add one intermediate duty and re-settle. Default rule below. Cap extra probes. Timeout / unsettled still ≠ Measured.
-5. **Build order after lamp persist (v1.17, already on master):**
-   1. below-BIOS + absolute / dense grid on **Low**
+4. **Build order after lamp persist (v1.17, already on master):**
+   1. below-BIOS + absolute / dense grid on **Low** ← **next CODE slice** after this plan merges
    2. Everyday coarse probes
    3. Hot lamp if it separates
-   4. adaptive gap-fill
-   5. point builder / confirm-on-lamp / BIOS → AUTO → BIOS
-   6. Phase 2 Home editor **only after that**
-6. Phase 1 Hold stays two-end Quiet–Cool. **No Home curve editor in Phase 1.**
-7. Prior locks unchanged: a ~25–40+ minute first Optimize is OK. After a **Low thermal abort**, skip Everyday, pairs, **and Hot**.
+   4. point builder / confirm-on-lamp / BIOS → AUTO → BIOS
+   5. Phase 2 Home editor **only after that**
+5. Phase 1 Hold stays two-end Quiet–Cool. **No Home curve editor in Phase 1.**
+6. Prior locks unchanged: a ~25–40+ minute first Optimize is OK. After a **Low thermal abort**, skip Everyday, pairs, **and Hot**. Abort floors stay CPU 90 / GPU 83.
 
 ---
 
@@ -44,11 +42,10 @@ These replace the earlier “Option 3 / two frozen lamps / coarse 20-40-70-100 e
 2. The frozen heat lamp(s) are **saved with the run** (CPU workers, GPU work per frame). Fan tests reuse that exact lamp. Restart does not silently fall back to `HeatProfile.DefaultLow`. **Shipped v1.17** for Everyday + Low. Hot, when kept, must persist the same way in the Hot slice.
 3. Optimize observes **Idle BIOS** (no fan writes), frozen **Everyday**, frozen **Low**, and frozen **Hot when it separates**. Preferred CPU (and GPU when the +15 °C gate passes) actually sit in different temperature bands. A Hot band that did not separate is Unknown, not stretched from Low.
 4. At those heats, tests may command duties **below and above** BIOS, then restore. Quiet-side points exist or are explicitly Unknown (stall / abort), not guessed. Low and Hot use the dense grid; Everyday stays coarser.
-5. After the base grid at a heat, **at most two** gap-fill holds per fan may fill a huge Measured-duty hole. Failed extra probes stay not-Measured.
-6. Confirmation runs **with the same Low lamp on**, and the expected temperature matches the **duties actually applied**, not the largest historical Δ.
-7. SQLite can answer: for fan group G and sensor S, the Measured `(temperature, duty, RPM, heat id)` points. A small Core builder emits those points. **No Home editor, no live curve actuator.**
-8. Cancel still keeps whatever heats/groups finished. Stop / abort / crash still returns motherboard BIOS + NVIDIA driver.
-9. Live Hold may still be today’s Quiet–Cool **policy** built from the Low map so the app remains usable. That Hold is not advertised as Path B curves.
+5. Confirmation runs **with the same Low lamp on**, and the expected temperature matches the **duties actually applied**, not the largest historical Δ.
+6. SQLite can answer: for fan group G and sensor S, the Measured `(temperature, duty, RPM, heat id)` points. A small Core builder emits those points. **No Home editor, no live curve actuator.**
+7. Cancel still keeps whatever heats/groups finished. Stop / abort / crash still returns motherboard BIOS + NVIDIA driver.
+8. Live Hold may still be today’s Quiet–Cool **policy** built from the Low map so the app remains usable. That Hold is not advertised as Path B curves.
 
 Phase 1 does **not** mean the product is validated. BIOS → AUTO → BIOS on locked heat remains the acceptance bar; it is a Pike gate at the end of this sequence, not a Home UI.
 
@@ -60,7 +57,7 @@ Today Watch freezes one Low heat, then fan tests only write duties **louder than
 
 A FanControl XY plot asks: “when this sensor is 45 °C, 60 °C, 80 °C, what duty should this fan run?” Those temperatures come from **different heat**, not from turning one fan up and down under a single lamp. One isobar’s settled temps sit in a narrow band. Stretching that band into a full-range curve is invention.
 
-v1.16 stopped treating timeout holds as Measured. v1.17 persists the Watch lamp. Still missing: below-BIOS writes, a dense Low grid, Everyday probes, a Hot lamp, gap-fill, confirmation-on-lamp, and the point builder.
+v1.16 stopped treating timeout holds as Measured. v1.17 persists the Watch lamp. Still missing for Phase 1: below-BIOS writes, a dense Low grid, Everyday probes, a Hot lamp, confirmation-on-lamp, and the point builder. Adaptive duty gap-fill is optional Later, not this list.
 
 **Files:** `FanTestRunner.DutiesAbove`, `FanTestSchedule.ScreenDuties` `{40,70,100}`, `InfluenceMapBuilder.BuildEntry`, `PolicyConfirmer.ExpectedSettled`, `MainWindow.ConfirmAppliedAsync` (heater already `Stop()`’d).
 
@@ -76,7 +73,7 @@ For each writable fan group (motherboard header or one NVIDIA card set) and each
 
 Idle, Everyday, Low, and (when it separates) Hot produce different \(T\) bands on this class of PC (live Watch: idle ~47–49 °C CPU / ~46 °C GPU; Everyday ~58–59; Low ~62 CPU / ~59 GPU when the lamp hit +15 °C). Everyday vs Low is only a few °C here — that is why Hot exists, and why Hot is skipped rather than invented if it cannot sit clearly above Low. That spread is the **X axis** of a temp→duty plot. Duties at each heat are the **Y axis** candidates.
 
-Phase 1 stores the cloud of Measured points. It does **not** interpolate gaps, pick a polyline, or apply it live. Gap-fill is an **extra measured probe**, not interpolation. Phase 2 will pick, per heat, a quietest useful duty (1 °C plateau + targets) and connect those few **knots** across heats. Segments between knots are Modeled, never Measured.
+Phase 1 stores the cloud of Measured points. It does **not** interpolate gaps, pick a polyline, or apply it live. Phase 2 will pick, per heat, a quietest useful duty (1 °C plateau + targets) and connect those few **knots** across heats. Segments between knots are Modeled, never Measured. Extra duty probes in huge holes (adaptive gap-fill) are optional Later, not Phase 1.
 
 ```text
 Duty %
@@ -106,7 +103,7 @@ Danny locked this out. Varying duty at one heat does move settled \(T\) a little
 
 #### Option 3 — Two frozen lamps + idle observe; Low-first; slim Everyday (superseded)
 
-The previous plan recommended Idle + Everyday + Low only, coarse 20/40/70/100 at every heat, and deferred gap-fill. **Danny 2026-09-21 locked Hot, a denser Low/Hot grid, below-BIOS as required, and gap-fill in Phase 1.** Option 3 is historical.
+The previous plan recommended Idle + Everyday + Low only and a coarse 20/40/70/100 grid at every heat. **Danny 2026-09-21 locked Hot, a denser Low/Hot grid, and below-BIOS as required.** Adaptive gap-fill stays deferred (Later). Option 3 is historical.
 
 #### Locked — Idle observe + Everyday + Low + Hot-if-separates
 
@@ -115,21 +112,21 @@ The previous plan recommended Idle + Everyday + Low only, coarse 20/40/70/100 at
 | **Idle** | `HeatProfile.Idle` (no synthetic work) | **None.** Store one settled BIOS snapshot: temps, duties, RPMs. | 1 settle-by-measurement (timeout 90 s). Not 3×. Idle is the cool knot, not a characterization of GPU fans. |
 | **Everyday** | Existing `HeatProfile.Everyday` (quarter CPU threads, 720p, light GPU work). Not calibrated. | Only groups that **moved a temperature at Low**. Coarse grid (below and above BIOS). | 1 settled BIOS reference per group (or one shared Everyday BIOS hold at the start of that stage). |
 | **Low** | Calibrate-then-freeze as today (`HeatCalibrator` until GPU Core ≥ 15 °C from idle, or cap / 8 °C below GPU abort). CPU workers stay Everyday. | Full dense screen + refine, **absolute** duties (below and above BIOS). This is still the map that decides who matters. | Keep **3×** BIOS holds (today’s STABLE / DRIFTING / NOISY / UNAVAILABLE + MDE). |
-| **Hot** | Calibrate-then-freeze **like Low**, starting from the stored Low lamp and adding **GPU work-per-frame** (not all-core High, not extra CPU threads). Hard stop ~8 °C under abort (**CPU 82 / GPU 75**). | Same **dense** grid as Low, **Low-movers only**. Skip the whole stage if Hot does not separate. | 1 settled BIOS reference at the start of the stage (not a second 3× Watch). If that BIOS settle does not sit ≥ 5 °C above Low on CPU or GPU, skip writes and label Hot Unknown. |
+| **Hot** | Calibrate-then-freeze **like Low**, starting from the stored Low lamp and adding **GPU work-per-frame** (not all-core High, not extra CPU threads). Hard stop ~8 °C under abort (**CPU 82 / GPU 75**). | Same **dense** grid as Low, **Low-movers only**. Skip the whole stage if Hot does not separate. | 1 settled BIOS reference at the start of the stage (not a second 3× Watch). **PLAN DEFAULT (confirm):** if that BIOS settle does not sit ≥ 5 °C above Low on CPU or GPU, skip writes and label Hot Unknown. |
 
 **Calibrate-then-freeze per level:** Low is calibrated in Watch (today). Everyday is a fixed second lamp (already in `HeatProfile.Everyday`). Hot is calibrated at the **Hot fan-test stage**, not by stretching Watch into an all-core abort. Do not change heater **during** a hold to chase a temperature (App.md already forbids that).
 
 **Watch stays Idle → Everyday → Low (3× BIOS) as today.** Do not add a Hot abort-pass to Watch. Persist Everyday + Low as v1.17 already does. Persist Hot only if the Hot stage kept a frozen profile.
 
-**“Separates enough” (default, KISS):** After Hot calibration hits the work cap or the 8 °C-under-abort stop, compare Hot’s BIOS-settled preferred CPU (and GPU when present) to Low’s BIOS-settled values for the same sensors. **Keep Hot** if at least one of those sensors is **≥ 5 °C hotter than Low**. **Skip Hot** if neither is. Do not invent a Hot band. Do not loosen 90/83 to force a Hot.
+**“Separates enough” — PLAN DEFAULT (confirm, not a locked °C):** After Hot calibration hits the work cap or the 8 °C-under-abort stop, compare Hot’s BIOS-settled preferred CPU (and GPU when present) to Low’s BIOS-settled values for the same sensors. **Keep Hot** if at least one of those sensors is **≥ 5 °C hotter than Low**. **Skip Hot** if neither is. This default does not invent temperatures; it only decides whether the Hot stage runs. Do not invent a Hot band. Do not loosen 90/83 to force a Hot.
 
 **Order of Optimize “Test fans”** (runtime; code slices still follow the locked build order):
 
 1. Cool-down gate (CPU/GPU ≤ 60 °C) as today (`ExperimentStartGate`).  
-2. Apply **Low** lamp. Dense screen/refine all eligible groups (including quieter than BIOS). Restore after each hold. Gap-fill at this heat once that slice exists.  
+2. Apply **Low** lamp. Dense screen/refine all eligible groups (including quieter than BIOS). Restore after each hold.  
 3. Stop heat, wait for the 60 °C gate again.  
-4. **Everyday** only if Low individuals **Completed**. Probe Low-movers with the coarse grid. Restore after each. Gap-fill at this heat once that slice exists.  
-5. **Hot** only if Low individuals **Completed**. Calibrate-then-freeze; if it separates, dense-probe Low-movers; else skip (Unknown). Restore after each hold. Gap-fill at this heat once that slice exists.  
+4. **Everyday** only if Low individuals **Completed**. Probe Low-movers with the coarse grid. Restore after each.  
+5. **Hot** only if Low individuals **Completed**. Calibrate-then-freeze; if it separates, dense-probe Low-movers; else skip (Unknown). Restore after each hold.  
 6. Idle observe can be taken from Watch (already recorded) if that idle window settled; if not, one extra idle settle after tests, still **no writes**.  
 7. Pairs: **Low only**, and only if Low individuals **finished**, same selector as today (max 3, slight effects eligible, no GPU–GPU on one card). Do not repeat pairs at Everyday or Hot.
 
@@ -150,24 +147,6 @@ Replace `DutiesAbove` (skip if `duty <= current BIOS`) with an **absolute grid**
 **Per hold:** `SafeFanSession.TrySetDuty` → settle-by-measurement (`TemperatureSettle.RelevantTempsSettled`, 5 samples, 1 °C band) → timeout 90 s. **Timeout ⇒ not Measured.** Stall / 0 RPM ⇒ drop point, do not fit. Duty or RPM did not actually change enough (existing 5% duty / RPM-up rule, generalized to “commanded quieter” as RPM down or duty down ≥ 5%) ⇒ Unknown, not a fake Δ.
 
 NVIDIA GPU fans: still one representative per card; still skipped at a heat where that heat’s GPU rise from idle is **< 15 °C**. Everyday will usually skip NVIDIA writes. Low uses the existing `GpuHeat.IsUseful` on Watch Low rise. Hot may write NVIDIA fans **only if** that Hot BIOS-settled GPU Core is ≥ 15 °C above Watch idle.
-
-### Adaptive gap-fill (Phase 1, in scope)
-
-Not a planner. Not interpolation. One extra measured hold in a hole.
-
-**When:** After screen + refine have finished for a fan at a heat, look at that fan’s **Measured** (settled, usable RPM) points at that heat, sorted by duty.
-
-**Default rule (pick one, KISS):** if two **adjacent Measured duties** differ by **≥ 25 percentage points**, command **one** intermediate duty (midpoint, rounded to the nearest 5%) and re-settle.
-
-Why duty gap, not a °C gap: the trigger does not have to choose CPU vs GPU, and it does not fire on noisy temps. Everyday’s coarse 20/40/70/100 naturally has 30-point holes (40–70, 70–100), so this fills ~55 and ~85 if refine did not already settle them. Low/Hot’s dense 15-point screen only fires when a hold was skipped or failed, which is the hole we actually want to retry once.
-
-**Caps / honesty:**
-
-- **Max 2** gap-fill probes per fan per heat. Stop even if a hole remains.  
-- Do not command a duty already held at this heat, or a duty that already stalled / 0 RPM at this heat.  
-- Timeout / still-moving / stall / 0 RPM / non-STABLE **still ≠ Measured**. A failed gap-fill does not invent a point and does not consume a second retry of the same duty.  
-- Loud-first still applies: if the midpoint is quieter than BIOS and we are already aborting on quiet holds, skip remaining quieter gap-fills.  
-- Do not start gap-fill after a thermal abort at that heat.
 
 ### How points become a temp→duty **candidate** (not a UI)
 
@@ -190,7 +169,7 @@ TemperatureDutyPoint(
 
 **Unknown:** timeout, stall, non-STABLE, GPU gate fail, skipped quieter abort, skipped Hot that did not separate, no tach.
 
-**Modeled / Inferred:** **not produced in Phase 1.** Phase 2 may linearly connect knots and must tag those segments Modeled. Gap-fill is not Modeled — it is another hold that either Measured or did not.
+**Modeled / Inferred:** **not produced in Phase 1.** Phase 2 may linearly connect knots and must tag those segments Modeled.
 
 A `TemperatureDutyPointBuilder` reads stored samples (with heat id + settled bit) and emits the list. Persist the list (new SQLite table or columns on samples — prefer **columns on `fan_test_sample` plus a thin `heat_level` table**, not a new framework). Phase 2 Home editor reads this; Phase 1 tests assert the builder.
 
@@ -200,7 +179,7 @@ Do **not** collapse to one best Δ for this candidate list. Keep `InfluenceMapBu
 
 **Keep at Low only. Do not run across heats in Phase 1.**
 
-Pairs answer “do these two fans add or fight at this heat?” That does not create XY knots. Repeating pairs at Everyday or Hot is time we should spend on quieter-than-BIOS, a second/third heat, and gap-fill.
+Pairs answer “do these two fans add or fight at this heat?” That does not create XY knots. Repeating pairs at Everyday or Hot is time we should spend on quieter-than-BIOS and a second/third heat.
 
 If Low individuals abort/cancel with a partial map: skip pairs, Everyday, and Hot (today’s `OptimizeWalkOutcome.SkipPairs`, extended). Pair leftovers stay Unknown. Cancel still helps via the individual Low map.
 
@@ -216,7 +195,6 @@ Rough Phase 1 first Optimize (same PC class, 90 s cap per hold, many holds settl
 | Low dense screen/refine + below-BIOS | ~12–25 min |
 | Everyday coarse probes on movers | ~4–8 min |
 | Hot calibrate + dense probes **if it separates** | ~8–20 min (0 if skipped) |
-| Gap-fill (≤ 2 per fan per heat that ran) | ~2–8 min |
 | Pairs at Low (if individuals finished) | ~4–8 min |
 | Confirmation **with Low lamp on** | ~2 min |
 
@@ -263,7 +241,7 @@ Walk UI: keep one “Test fans” step. Do not add a second walk page. Status te
 | Frozen Everyday + Low `HeatProfile` (CpuWorkers, GpuWidth/Height, GpuPasses, GpuIterations) | Columns / JSON on `baseline_run` | **Shipped v1.17.** Fan tests load this; missing lamp ⇒ do not heat, do not fake DefaultLow. |
 | Frozen Hot `HeatProfile` when Hot was kept | Same place, extra profile / heat id | Missing Hot after a skip is correct (Unknown band), not an error. |
 | Idle/Everyday/Low BIOS settle temps + 3× Low holds, MDE, STABLE | Existing `baseline_sample` / `baseline_metric` | Add Everyday/Hot GPU/CPU rise metrics if missing. |
-| Fan hold: stage, group, **heat id**, **settled bool**, snapshot JSON | `fan_test_sample` extra columns | Snapshot already has sensors/clocks/power/duty/RPM. Gap-fill is just another hold with a stage name. |
+| Fan hold: stage, group, **heat id**, **settled bool**, snapshot JSON | `fan_test_sample` extra columns | Snapshot already has sensors/clocks/power/duty/RPM. |
 | Influence (Low, settled-only) | `influence_entry` | Still “who matters.” |
 | Pairs (Low only) | `interaction_*` | Unchanged shape; skip if Low not Completed. |
 | Curve candidates | Derived table `temperature_duty_point` **or** built on read | Prefer build-on-read in Phase 1 (fewer moving parts); add a table only if the builder is expensive. Tests freeze fixtures, not a live DB. |
@@ -327,9 +305,9 @@ Ordered smallest first. Each is a reviewable code slice. No Home editor.
 - **Tests:** Null preferred CPU while holding ⇒ abort + restore, not −5% duty.  
 - **Done when:** Unit tests green.  
 - **Local proof:** Not required (unsafe to fake on a real PC).  
-- **Sequence note:** Safety honesty, not part of Danny’s locked experiment ladder. May ship as a **small safety PR** that does not start below-BIOS, Everyday, Hot, or the editor. Do not let it jump the locked build order.
+- **Sequence note:** Safety honesty, not part of Danny’s locked experiment ladder. Stays in **Edges / Later** as a **small optional safety PR** that does not start below-BIOS, Everyday, Hot, or the editor. **Not** the locked next experiment slice.
 
-D1 and D2 are the honesty floor already shipped. Multi-heat sits on D5 (below-BIOS + dense Low), then Everyday, then Hot, then gap-fill. D3+D4 ship with the point-builder / confirm-on-lamp slice. D6 should not wait forever, but it is not the next experiment slice.
+D1 and D2 are the honesty floor already shipped. Multi-heat sits on D5 (below-BIOS + dense Low), then Everyday, then Hot. D3+D4 ship with the point-builder / confirm-on-lamp slice. D6 stays Edges / Later — do not delete it, and do not make it the next experiment slice.
 
 ---
 
@@ -339,19 +317,21 @@ No Home curve editor in any slice. After each **code** slice: `dotnet test`, `do
 
 | # | Slice | Intent | In scope | Out of scope | Risks | Pike gate |
 | --- | --- | --- | --- | --- | --- | --- |
-| **0** | This plan (refreshed locks) | Agree the locked ladder (Idle → Everyday → Low → Hot-if-separates), dense Low/Hot grid, below-BIOS, gap-fill in Phase 1 | Markdown | Product C#/XAML | — | **Ship / Ship after fixes / Do not ship this plan** |
+| **0** | This plan (refreshed locks) | Agree the locked ladder (Idle → Everyday → Low → Hot-if-separates), dense Low/Hot grid, below-BIOS required. Gap-fill is Later, not this table. | Markdown | Product C#/XAML | — | **Ship / Ship after fixes / Do not ship this plan** |
 | **1** | D1 settled flag | Evidence cannot lie about timeout | Sample flag, influence/pairs gate | UI, heats, duties | Older DB rows: treat missing flag as Unknown, not Measured | **Shipped v1.16** |
 | **2** | D2 persist lamp | Reproducible heat | `baseline_run` profile(s), actuator fallback removed | Second heat writes | Advanced “Run fan tests” without Watch must refuse | **Shipped v1.17** |
-| **3** | D5 below-BIOS + dense Low grid | Quiet-side data at **Low** with the locked dense grid | Absolute duties 15–100 screen, refine 20/40/50/70/85, loud-then-quiet | Everyday, Hot, gap-fill, editor | Quiet + Low may abort — that is acceptable | Local: one Low fan-test retry |
-| **4** | Everyday coarse probes | **X-axis** coverage on Low-movers | Idle observe reuse; Everyday 20/40/70/100 + refine 55/85 after Low **Completed**; per-heat 30 min cap; GPU gate per heat; walk status copy only | Hot lamp, gap-fill, Home editor, pairs at Everyday, Isolated GPU, live curve actuator | Time; Everyday GPU Unknown; thermal abort skip Everyday | Local: Watch temps show two bands; SQLite has Everyday+Low samples |
-| **5** | Hot lamp if it separates | Hotter X-axis band | Calibrate-then-freeze from Low via more GPU work-per-frame; hard stop ~8 °C under abort; skip if < 5 °C above Low on CPU and GPU; dense grid on Low-movers; persist Hot profile only when kept | All-core High, editor, inventing Hot | May skip often on this PC — that is correct | Local: Hot BIOS ≥ 5 °C above Low **or** Hot stage skipped + Unknown |
-| **6** | Adaptive gap-fill | Fill huge Measured-duty holes | Duty gap ≥ 25 → one midpoint (nearest 5%); max 2 per fan per heat; still settle-or-Unknown | Planner, interpolation, extra heats | Extra time; do not explode Optimize | Tests: 40 then 100 Measured ⇒ one 70 probe; third hole ignored |
-| **7** | `TemperatureDutyPointBuilder` + D3+D4 confirm on lamp, scaled Predict | Phase 2 can read knots; confirmation means something | Core builder + tests; build-on-read from samples including Hot id; lamp on during confirm; duty-scaled expected | WPF editor, interpolation, applying points | Mis-tagging BIOS leftover — reuse v1.14 hold splitting; confirm+lamp may approach abort | Tests: idle/everyday/low/(hot) fixtures span T; timeout excluded; blend does not predict full Δ |
-| **8** | BIOS → AUTO → BIOS on **Low lamp** (observe-only protocol) | Validation bar | Same locked Low: settle BIOS, apply current **policy** (not curves), settle, restore BIOS, settle; compare with MDE; persist three legs | Curve editor; claiming Path B product done | Policy A/B/A is not curve A/B/A; still the right heat. Extra time | Local: AUTO cooler at similar RPM **or** as warm at less RPM; return-to-BIOS matches first BIOS within wander |
+| **3** | D5 below-BIOS + dense Low grid | Quiet-side data at **Low** with the locked dense grid. **Next CODE slice after this plan merges.** | Absolute duties 15–100 screen, refine 20/40/50/70/85, loud-then-quiet | Everyday, Hot, editor (gap-fill is Later) | Quiet + Low may abort — that is acceptable | Local: one Low fan-test retry |
+| **4** | Everyday coarse probes | **X-axis** coverage on Low-movers | Idle observe reuse; Everyday 20/40/70/100 + refine 55/85 after Low **Completed**; per-heat 30 min cap; GPU gate per heat; walk status copy only | Hot lamp, Home editor, pairs at Everyday, Isolated GPU, live curve actuator | Time; Everyday GPU Unknown; thermal abort skip Everyday | Local: Watch temps show two bands; SQLite has Everyday+Low samples |
+| **5** | Hot lamp if it separates | Hotter X-axis band | Calibrate-then-freeze from Low via more GPU work-per-frame; hard stop ~8 °C under abort; **PLAN DEFAULT (confirm):** skip if neither CPU nor GPU is ≥ 5 °C above Low; dense grid on Low-movers; persist Hot profile only when kept | All-core High, editor, inventing Hot | May skip often on this PC — that is correct | Local: Hot BIOS ≥ 5 °C above Low **or** Hot stage skipped + Unknown |
+| **6** | `TemperatureDutyPointBuilder` + D3+D4 confirm on lamp, scaled Predict | Phase 2 can read knots; confirmation means something | Core builder + tests; build-on-read from samples including Hot id; lamp on during confirm; duty-scaled expected | WPF editor, interpolation, applying points | Mis-tagging BIOS leftover — reuse v1.14 hold splitting; confirm+lamp may approach abort | Tests: idle/everyday/low/(hot) fixtures span T; timeout excluded; blend does not predict full Δ |
+| **7** | BIOS → AUTO → BIOS on **Low lamp** (observe-only protocol) | Validation bar | Same locked Low: settle BIOS, apply current **policy** (not curves), settle, restore BIOS, settle; compare with MDE; persist three legs | Curve editor; claiming Path B product done | Policy A/B/A is not curve A/B/A; still the right heat. Extra time | Local: AUTO cooler at similar RPM **or** as warm at less RPM; return-to-BIOS matches first BIOS within wander |
 
-**Optional parallel (not the locked next experiment slice):** D6 Hold abort on lost temps — tests only, no new experiment kind.
+**Edges / Later (not the locked next slice, do not delete):**
 
-**“Foundation ready for Phase 2”** = slices 3–7 landed and a local run produced Measured points at **more than one heat** for at least one CPU-linked fan, with settled flags correct, and Hot either Measured or explicitly skipped Unknown. Slice 8 is the honesty check that Hold-at-Low is not worse than BIOS; it does not unlock the editor by itself, but **do not start Phase 2 UI if slice 8 shows AUTO hotter at similar or higher fan effort.**
+- **D6 Hold abort on lost preferred temps** — small optional safety PR. Tests only. Does not start below-BIOS, Everyday, Hot, or the editor. Not the locked next experiment slice.
+- **Adaptive duty gap-fill** — optional Later idea only. After a heat’s base Measured grid exists, a later slice *could* add one intermediate duty in a huge hole and re-settle. **Not Phase 1. Not in the locked build order.** No Phase 1 default (no 25-point rule, no max-2 cap locked here). Timeout / unsettled would still ≠ Measured if it ever ships.
+
+**“Foundation ready for Phase 2”** = slices 3–6 landed and a local run produced Measured points at **more than one heat** for at least one CPU-linked fan, with settled flags correct, and Hot either Measured or explicitly skipped Unknown. Slice 7 is the honesty check that Hold-at-Low is not worse than BIOS; it does not unlock the editor by itself, but **do not start Phase 2 UI if slice 7 shows AUTO hotter at similar or higher fan effort.**
 
 Phase 1 Hold stays `PolicyOptimizer` + `PolicySession` (two-end). Do not wire `TemperatureDutyPoint` into the actuator yet.
 
@@ -372,11 +352,11 @@ Phase 1 Hold stays `PolicyOptimizer` + `PolicySession` (two-end). Do not wire `T
 - Causal validity from power/clock (parked). May be a later honesty add if Δs look like power wander.  
 - Inventing Modeled duties at temperatures we never observed — including inventing Hot when it did not separate.  
 - Kitchen-timer dwell replacing settle-by-measurement.  
-- Unbounded gap-fill or a second gap-fill pass after failed extra probes.
+- Adaptive duty gap-fill (optional **Later** — not Phase 1; see Edges / Later). Do not start it in a Phase 1 slice.
 
 ### Phase 2 sequel (mention only)
 
-When Phase 1 data exists: Home shows per-group XY (temp → duty) **seeded from Measured knots** (idle BIOS, Everyday pick, Low pick, Hot pick if it existed). Segments between knots Modeled. Outside the measured T range Unknown. User may edit. What we learned is the evidence for those knots (wander, RPM vs °C isobar still useful as supporting chart, pairs, confirmation). Quiet–Cool regenerates a first draft; manual edits win. Do **not** design that editor in this plan. Do **not** start it until slices 3–8 above.
+When Phase 1 data exists: Home shows per-group XY (temp → duty) **seeded from Measured knots** (idle BIOS, Everyday pick, Low pick, Hot pick if it existed). Segments between knots Modeled. Outside the measured T range Unknown. User may edit. What we learned is the evidence for those knots (wander, RPM vs °C isobar still useful as supporting chart, pairs, confirmation). Quiet–Cool regenerates a first draft; manual edits win. Do **not** design that editor in this plan. Do **not** start it until slices 3–7 above.
 
 ---
 
@@ -384,14 +364,13 @@ When Phase 1 data exists: Home shows per-group XY (temp → duty) **seeded from 
 
 These were open questions. They are **locked**. Slice order in E does not need another design pass.
 
-1. **Heat ladder:** Idle (BIOS observe) → Everyday → Low → **Hot**. Hot = game-render-like, hotter than Low, calibrate-then-freeze like Low, hard stop ~8 °C under abort, more GPU work-per-frame **not** all-core High. If Hot cannot separate enough °C from Low (default: neither CPU nor GPU ≥ 5 °C above Low) → skip Hot; band Unknown.
+1. **Heat ladder:** Idle (BIOS observe) → Everyday → Low → **Hot**. Hot = game-render-like, hotter than Low, calibrate-then-freeze like Low, hard stop ~8 °C under abort (CPU 90 / GPU 83 → ~82/75), more GPU work-per-frame **not** all-core High. If Hot cannot separate enough °C from Low → skip Hot; band Unknown. **PLAN DEFAULT (confirm):** neither preferred CPU nor GPU ≥ 5 °C above Low ⇒ skip. That default does not invent temps.
 2. **Below-BIOS duties:** required. Absolute grid, loud-first then quiet, restore every hold, stall/0 RPM = skip.
 3. **Duty grids:** Low+Hot screen 15/30/45/60/75/90/100, refine 20/40/50/70/85 on movers. Everyday stays 20/40/70/100 + refine 55/85.
-4. **Adaptive gap-fill:** in Phase 1. Default: adjacent Measured duty gap **≥ 25 points** → one midpoint (nearest 5%), **max 2** per fan per heat. Timeout/unsettled ≠ Measured.
-5. **Build order after v1.17 lamp persist:** (1) below-BIOS + dense Low, (2) Everyday coarse, (3) Hot if separates, (4) gap-fill, (5) point builder / confirm-on-lamp / BIOS→AUTO→BIOS, (6) Phase 2 editor only after that.
-6. **Phase 1 Hold:** **Keep today’s two-end Quiet–Cool policy.** No Home curve editor in Phase 1. Do not sit on BIOS until Phase 2. Do not apply temp→duty curves live in Phase 1.
-7. **Wall-clock:** **Yes.** A ~25–40+ minute first Optimize is acceptable. Restore after every hold. Abort floors stay 90/83. Everyday and Hot stay in the default walk (not Advanced-only) **when Low Completed**.
-8. **After a thermal abort at Low:** **Skip Everyday, pairs, and Hot.** May Hold the quieter conservative two-end policy from the partial Low map. Confirmation still runs if Hold applies. Do not start a new experiment kind after a thermal abort in Low.
+4. **Build order after v1.17 lamp persist:** (1) below-BIOS + dense Low ← **next CODE slice**, (2) Everyday coarse, (3) Hot if separates, (4) point builder / confirm-on-lamp / BIOS→AUTO→BIOS, (5) Phase 2 editor only after that. Adaptive gap-fill is **not** in this list (Later).
+5. **Phase 1 Hold:** **Keep today’s two-end Quiet–Cool policy.** No Home curve editor in Phase 1. Do not sit on BIOS until Phase 2. Do not apply temp→duty curves live in Phase 1.
+6. **Wall-clock:** **Yes.** A ~25–40+ minute first Optimize is acceptable. Restore after every hold. Abort floors stay 90/83. Everyday and Hot stay in the default walk (not Advanced-only) **when Low Completed**.
+7. **After a thermal abort at Low:** **Skip Everyday, pairs, and Hot.** May Hold the quieter conservative two-end policy from the partial Low map. Confirmation still runs if Hold applies. Do not start a new experiment kind after a thermal abort in Low.
 
 ---
 
@@ -409,4 +388,4 @@ These were open questions. They are **locked**. Slice order in E does not need a
 
 ## Recommendation (one sentence)
 
-**Ship this locked ladder:** honesty D1–D2 already on master; next code is below-BIOS + dense Low, then Everyday coarse, then Hot only if it separates, then capped gap-fill, then point builder + confirm-on-lamp + Low-lamp BIOS → AUTO → BIOS — **no Home editor, no all-core High, no invented Hot band, abort floors unchanged.**
+**Ship this locked ladder:** honesty D1–D2 already on master; next code is below-BIOS + dense Low, then Everyday coarse, then Hot only if it separates, then point builder + confirm-on-lamp + Low-lamp BIOS → AUTO → BIOS — **no Home editor, no Phase 1 gap-fill, no all-core High, no invented Hot band, abort floors unchanged.**
