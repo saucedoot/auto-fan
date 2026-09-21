@@ -1,0 +1,19 @@
+{
+  "Samples": [
+    { "OffsetSeconds": 0, "Phase": "Idle", "Cpu": 45.0, "Gpu": 40.0, "Ambient": 24.0 },
+    { "OffsetSeconds": 1, "Phase": "Idle", "Cpu": 45.2, "Gpu": 40.1, "Ambient": 24.0 },
+    { "OffsetSeconds": 2, "Phase": "Idle", "Cpu": 44.8, "Gpu": 39.9, "Ambient": 24.0 },
+    { "OffsetSeconds": 3, "Phase": "Low", "Cpu": 68.0, "Gpu": 64.0, "Ambient": 24.0 },
+    { "OffsetSeconds": 4, "Phase": "Low", "Cpu": 72.0, "Gpu": 70.0, "Ambient": 24.0 },
+    { "OffsetSeconds": 5, "Phase": "Low", "Cpu": 71.5, "Gpu": 69.5, "Ambient": 24.0 },
+    { "OffsetSeconds": 6, "Phase": "High", "Cpu": 80.0, "Gpu": 78.0, "Ambient": 24.0 },
+    { "OffsetSeconds": 7, "Phase": "Cooldown", "Cpu": 64.0, "Gpu": 62.0, "Ambient": 24.0 },
+    { "OffsetSeconds": 8, "Phase": "Cooldown", "Cpu": 56.0, "Gpu": 54.0, "Ambient": 24.0 },
+    { "OffsetSeconds": 9, "Phase": "Cooldown", "Cpu": 49.0, "Gpu": 47.0, "Ambient": 24.0 },
+    { "OffsetSeconds": 10, "Phase": "Cooldown", "Cpu": 46.2, "Gpu": 43.0, "Ambient": 24.0 },
+    { "OffsetSeconds": 11, "Phase": "Cooldown", "Cpu": 46.0, "Gpu": 42.8, "Ambient": 24.0 },
+    { "OffsetSeconds": 12, "Phase": "Cooldown", "Cpu": 45.9, "Gpu": 42.6, "Ambient": 24.0 },
+    { "OffsetSeconds": 13, "Phase": "Cooldown", "Cpu": 45.8, "Gpu": 42.5, "Ambient": 24.0 },
+    { "OffsetSeconds": 14, "Phase": "Cooldown", "Cpu": 45.7, "Gpu": 42.4, "Ambient": 24.0 }
+  ]
+}

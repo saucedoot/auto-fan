@@ -1,0 +1,38 @@
+---
+description: "YAGNI — build only what the current task actually needs. Prevents speculative complexity that's hard for a non-programmer to catch by reading the diff."
+globs:
+alwaysApply: true
+---
+
+# YAGNI (You Aren't Gonna Need It)
+
+Build the simplest thing that satisfies the task in front of you. Do not
+build for a future task that doesn't exist yet.
+
+- Don't add a feature, field, setting, or endpoint because it "might be
+  useful later." Add it when a real task needs it, not before.
+- Don't add configuration options, flags, or environment variables for
+  behavior nothing currently uses. Every toggle is something that can be
+  misconfigured.
+- Prefer a plain, direct implementation over a general or "flexible" one.
+  Don't build an abstraction layer, plugin system, or extensible framework
+  to solve a problem a few lines of straightforward code already solves.
+- Don't introduce a new dependency, library, or design pattern to handle a
+  case that isn't real yet. Fewer dependencies means less to secure, update,
+  and reason about.
+- Don't create unused code paths: dead branches, unused parameters,
+  commented-out alternatives "in case we go back to it." Delete instead of
+  disabling.
+- This applies to data models too — don't add speculative columns, tables,
+  or relations for features that haven't been built. Extend the schema when
+  the feature actually arrives.
+- If you notice a genuine opportunity for something the project will likely
+  need soon, say so in your task summary instead of building it — let me
+  decide whether it's worth doing now.
+
+## This does not override the safety floor
+
+YAGNI is about deferring speculative features, not about deferring the
+non-negotiables in `00-core-safety.mdc` (access control, server-side auth
+checks, secrets handling). Those are needed for whatever exists today, not
+for some future feature — so they're never "premature."

@@ -1,0 +1,21 @@
+---
+description: "How to approach tasks in this project: plan first, scope tight, leave evidence a non-programmer can trust."
+globs:
+alwaysApply: true
+---
+
+# Workflow
+
+- For anything beyond a trivial one-line fix, propose a short plan (what
+  you'll change, which files, why) before editing, and wait for confirmation
+  on anything non-trivial.
+- Keep each change scoped to the task at hand. Don't restructure, rename, or
+  "clean up" unrelated code in the same pass — flag it as a separate
+  suggestion instead.
+- Leave evidence a non-programmer can trust without reading the diff
+  line-by-line: write or update automated tests for new logic, run the
+  linter and test suite, and don't declare a task finished until both pass.
+- After a task, summarize in plain language: what changed, why, and
+  anything that touches security, cost, external services, or user data.
+- If a task turns out bigger than expected or you get stuck, say so and
+  re-propose the plan rather than pushing through with a workaround.

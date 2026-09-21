@@ -1,0 +1,570 @@
+﻿<Window x:Class="AutoFan.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:AutoFan.App"
+        Title="{Binding WindowTitle}"
+        Height="780"
+        Width="1100"
+        MinHeight="720"
+        MinWidth="1100"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource Brush.Window}"
+        Foreground="{StaticResource Brush.Text}">
+  <Window.Resources>
+    <BooleanToVisibilityConverter x:Key="BoolVis" />
+    <local:InverseBooleanToVisibilityConverter x:Key="InverseBoolVis" />
+  </Window.Resources>
+
+  <Grid x:Name="ShellGrid" Margin="28">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+    </Grid.RowDefinitions>
+
+    <StackPanel Grid.Row="0">
+      <TextBlock FontSize="28" FontWeight="SemiBold" Text="AUTO Fan" />
+      <StackPanel Margin="0,16,0,0" Orientation="Horizontal">
+        <Button Content="Home"
+                Click="OnSelectHome">
+          <Button.Style>
+            <Style TargetType="Button" BasedOn="{StaticResource TabButton}">
+              <Style.Triggers>
+                <DataTrigger Binding="{Binding IsHomeTab}" Value="True">
+                  <Setter Property="Tag" Value="Selected" />
+                </DataTrigger>
+              </Style.Triggers>
+            </Style>
+          </Button.Style>
+        </Button>
+        <Button Margin="20,0,0,0"
+                Content="What we learned"
+                Click="OnSelectLearned">
+          <Button.Style>
+            <Style TargetType="Button" BasedOn="{StaticResource TabButton}">
+              <Style.Triggers>
+                <DataTrigger Binding="{Binding IsLearnedTab}" Value="True">
+                  <Setter Property="Tag" Value="Selected" />
+                </DataTrigger>
+              </Style.Triggers>
+            </Style>
+          </Button.Style>
+        </Button>
+        <Button Margin="20,0,0,0"
+                Content="Advanced"
+                Click="OnSelectAdvanced">
+          <Button.Style>
+            <Style TargetType="Button" BasedOn="{StaticResource TabButton}">
+              <Style.Triggers>
+                <DataTrigger Binding="{Binding IsAdvancedTab}" Value="True">
+                  <Setter Property="Tag" Value="Selected" />
+                </DataTrigger>
+              </Style.Triggers>
+            </Style>
+          </Button.Style>
+        </Button>
+      </StackPanel>
+      <TextBlock Margin="0,10,0,0"
+                 Foreground="{StaticResource Brush.Danger}"
+                 Text="{Binding DiscoveryError}"
+                 Visibility="{Binding HasDiscoveryError, Converter={StaticResource BoolVis}}" />
+    </StackPanel>
+
+    <Grid x:Name="HomeGrid"
+          Grid.Row="1"
+          Margin="0,16,0,0"
+          Visibility="{Binding IsHomeTab, Converter={StaticResource BoolVis}}">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="20" />
+        <ColumnDefinition Width="300" />
+      </Grid.ColumnDefinitions>
+
+      <StackPanel x:Name="HomeMain">
+        <TextBlock Foreground="{StaticResource Brush.Muted}"
+                   Text="{Binding HomeTagline}" />
+        <TextBlock Foreground="{StaticResource Brush.Muted}"
+                   Text="{Binding Banner}"
+                   Visibility="{Binding IsDemoHardware, Converter={StaticResource BoolVis}}" />
+
+        <Grid x:Name="HardwareGrid" Margin="0,16,0,0">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="16" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="16" />
+            <ColumnDefinition Width="*" />
+          </Grid.ColumnDefinitions>
+          <StackPanel>
+            <TextBlock Foreground="{StaticResource Brush.Muted}" Text="CPU" />
+            <TextBlock Margin="0,4,0,0" Text="{Binding CpuName}" />
+          </StackPanel>
+          <StackPanel Grid.Column="2">
+            <TextBlock Foreground="{StaticResource Brush.Muted}" Text="GPU" />
+            <TextBlock Margin="0,4,0,0"
+                       Text="{Binding GpuName}"
+                       Visibility="{Binding CanChooseGpu, Converter={StaticResource InverseBoolVis}}" />
+            <Button Margin="0,4,0,0"
+                    Style="{StaticResource LinkButton}"
+                    Content="{Binding GpuName}"
+                    Click="OnPickGpu"
+                    Visibility="{Binding CanChooseGpu, Converter={StaticResource BoolVis}}" />
+            <TextBlock Margin="0,2,0,0"
+                       FontSize="12"
+                       Foreground="{StaticResource Brush.Muted}"
+                       Text="Click to choose"
+                       Visibility="{Binding CanChooseGpu, Converter={StaticResource BoolVis}}" />
+          </StackPanel>
+          <StackPanel Grid.Column="4">
+            <TextBlock Foreground="{StaticResource Brush.Muted}" Text="Motherboard" />
+            <TextBlock Margin="0,4,0,0" Text="{Binding MotherboardName}" />
+          </StackPanel>
+        </Grid>
+
+        <Grid x:Name="LiveGrid" Margin="0,16,0,0">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="16" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="16" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="16" />
+            <ColumnDefinition Width="*" />
+          </Grid.ColumnDefinitions>
+          <StackPanel>
+            <TextBlock Foreground="{StaticResource Brush.Muted}" Text="CPU" />
+            <TextBlock Margin="0,4,0,0" FontSize="18" Text="{Binding CpuTemperatureText}" />
+          </StackPanel>
+          <StackPanel Grid.Column="2">
+            <TextBlock Foreground="{StaticResource Brush.Muted}" Text="GPU" />
+            <TextBlock Margin="0,4,0,0" FontSize="18" Text="{Binding GpuTemperatureText}" />
+          </StackPanel>
+          <StackPanel Grid.Column="4">
+            <TextBlock Foreground="{StaticResource Brush.Muted}" Text="CPU power" />
+            <TextBlock Margin="0,4,0,0" FontSize="18" Text="{Binding CpuPowerText}" />
+          </StackPanel>
+          <StackPanel Grid.Column="6">
+            <TextBlock Foreground="{StaticResource Brush.Muted}" Text="GPU power" />
+            <TextBlock Margin="0,4,0,0" FontSize="18" Text="{Binding GpuPowerText}" />
+          </StackPanel>
+        </Grid>
+
+        <StackPanel Margin="0,16,0,0">
+          <TextBlock FontSize="16"
+                     FontWeight="SemiBold"
+                     Text="{Binding SetupHeadline}"
+                     Visibility="{Binding IsSetupBlocked, Converter={StaticResource BoolVis}}" />
+          <ItemsControl Margin="0,8,0,0" ItemsSource="{Binding EnvironmentChecks}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Margin="0,0,0,8"
+                        Padding="12"
+                        Background="{StaticResource Brush.Card}"
+                        CornerRadius="8">
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                      <TextBlock FontWeight="SemiBold" Text="{Binding Title}" />
+                      <TextBlock Margin="0,4,0,0"
+                                 Foreground="{StaticResource Brush.Muted}"
+                                 Text="{Binding Detail}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                      <TextBlock HorizontalAlignment="Right" Text="{Binding Status}">
+                        <TextBlock.Style>
+                          <Style TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="{StaticResource Brush.Danger}" />
+                            <Style.Triggers>
+                              <DataTrigger Binding="{Binding Passed}" Value="True">
+                                <Setter Property="Foreground" Value="{StaticResource Brush.Ok}" />
+                              </DataTrigger>
+                            </Style.Triggers>
+                          </Style>
+                        </TextBlock.Style>
+                      </TextBlock>
+                      <Button Margin="12,8,0,0"
+                              Padding="10,4"
+                              FontSize="13"
+                              Content="Find connected"
+                              Visibility="{Binding CanRun, Converter={StaticResource BoolVis}}"
+                              Click="OnFindConnectedFans" />
+                    </StackPanel>
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+
+        <StackPanel Margin="0,16,0,0"
+                    Visibility="{Binding IsHoldingPolicy, Converter={StaticResource BoolVis}}">
+          <TextBlock FontSize="20" FontWeight="SemiBold" Text="{Binding HoldingHeadline}" />
+          <TextBlock Margin="0,8,0,0"
+                     Foreground="{StaticResource Brush.Muted}"
+                     Text="{Binding HoldingCaption}" />
+          <TextBlock Margin="0,8,0,0" Text="{Binding OptimizeProgressText}" />
+          <StackPanel Margin="0,12,0,0"
+                      Orientation="Horizontal"
+                      Visibility="{Binding RetestOfferVisible, Converter={StaticResource BoolVis}}">
+            <Button Content="Re-check these fans"
+                    Width="180"
+                    Height="36"
+                    IsEnabled="{Binding CanRetest}"
+                    Click="OnRetest" />
+            <Button Margin="12,0,0,0"
+                    Style="{StaticResource SecondaryButton}"
+                    Content="Ignore"
+                    Width="80"
+                    Height="36"
+                    IsEnabled="{Binding CanIgnoreDrift}"
+                    Click="OnIgnoreDrift" />
+          </StackPanel>
+        </StackPanel>
+
+        <StackPanel Margin="0,16,0,0">
+          <Grid x:Name="PrioritySlider"
+                MaxWidth="420"
+                HorizontalAlignment="Stretch">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock VerticalAlignment="Center" Text="Quiet" />
+            <Slider Grid.Column="1"
+                    Margin="12,0"
+                    Minimum="0"
+                    Maximum="1"
+                    SmallChange="0.05"
+                    LargeChange="0.25"
+                    TickFrequency="0.25"
+                    IsSnapToTickEnabled="False"
+                    IsEnabled="{Binding CanEditPriorities}"
+                    Value="{Binding QuietCool, Mode=TwoWay}" />
+            <TextBlock Grid.Column="2" VerticalAlignment="Center" Text="Cool" />
+          </Grid>
+          <Expander Margin="0,12,0,0"
+                    Header="More detail"
+                    IsEnabled="{Binding CanEditPriorities}">
+            <StackPanel Margin="0,8,0,0" Width="220" HorizontalAlignment="Left">
+              <TextBlock Text="CPU target (°C)" />
+              <TextBox Margin="0,4,0,0"
+                       Text="{Binding CpuTargetCelsius, UpdateSourceTrigger=PropertyChanged}" />
+              <TextBlock Margin="0,8,0,0" Text="GPU target (°C)" />
+              <TextBox Margin="0,4,0,0"
+                       Text="{Binding GpuTargetCelsius, UpdateSourceTrigger=PropertyChanged}" />
+              <TextBlock Margin="0,8,0,0" Text="CPU stop test at (°C)" />
+              <TextBox Margin="0,4,0,0"
+                       Text="{Binding CpuAbortCelsius, UpdateSourceTrigger=PropertyChanged}" />
+              <TextBlock Margin="0,8,0,0" Text="GPU stop test at (°C)" />
+              <TextBox Margin="0,4,0,0"
+                       Text="{Binding GpuAbortCelsius, UpdateSourceTrigger=PropertyChanged}" />
+              <TextBlock Margin="0,8,0,0"
+                         Foreground="{StaticResource Brush.Muted}"
+                         Text="Tests always stop at 90 °C CPU / 83 °C GPU even if these are left at default." />
+            </StackPanel>
+          </Expander>
+          <Button Margin="0,12,0,0"
+                  Height="50"
+                  FontSize="18"
+                  Content="{Binding OptimizeButtonText}"
+                  IsEnabled="{Binding CanOptimize}"
+                  ToolTip="{Binding OptimizeUnavailableReason}"
+                  ToolTipService.ShowOnDisabled="True"
+                  Click="OnOptimize" />
+          <TextBlock Margin="0,8,0,0"
+                     Foreground="{StaticResource Brush.Muted}"
+                     Text="{Binding BiosCaption}" />
+          <TextBlock Margin="0,4,0,0"
+                     Foreground="{StaticResource Brush.Muted}"
+                     Text="{Binding OptimizeUnavailableReason}"
+                     Visibility="{Binding IsSetupBlocked, Converter={StaticResource BoolVis}}" />
+        </StackPanel>
+
+      </StackPanel>
+
+    <Border x:Name="FanPanel"
+            Grid.Column="2"
+            Padding="16"
+            VerticalAlignment="Stretch"
+            Background="{StaticResource Brush.Card}"
+            CornerRadius="12"
+            Visibility="{Binding ShowHomeFans, Converter={StaticResource BoolVis}}">
+      <DockPanel>
+        <DockPanel DockPanel.Dock="Top" LastChildFill="True">
+          <Button DockPanel.Dock="Right"
+                  Style="{StaticResource SecondaryButton}"
+                  Background="{StaticResource Brush.Window}"
+                  FontSize="12"
+                  Padding="10,6"
+                  Content="{Binding UnusedFansButtonText}"
+                  Visibility="{Binding CanHideUnusedFans, Converter={StaticResource BoolVis}}"
+                  Click="OnToggleUnusedFans" />
+          <TextBlock VerticalAlignment="Center"
+                     FontWeight="SemiBold"
+                     Text="Fan groups" />
+        </DockPanel>
+        <ItemsControl Margin="0,10,0,0" ItemsSource="{Binding FanGroups}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Border Margin="0,0,0,12"
+                      Padding="8"
+                      Background="{StaticResource Brush.Window}"
+                      CornerRadius="8">
+                <StackPanel>
+                  <TextBlock FontWeight="SemiBold" Text="{Binding Name}" />
+                  <TextBlock Margin="0,4,0,0">
+                    <Run Text="{Binding Duty, Mode=OneWay}" />
+                    <Run Text=" · " />
+                    <Run Text="{Binding Rpm, Mode=OneWay}" />
+                  </TextBlock>
+                  <TextBlock Margin="0,2,0,0"
+                             Foreground="{StaticResource Brush.Muted}">
+                    <Run Text="{Binding Kind, Mode=OneWay}" />
+                    <Run Text=" · " />
+                    <Run Text="{Binding ControlNote, Mode=OneWay}" />
+                  </TextBlock>
+                </StackPanel>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </DockPanel>
+    </Border>
+    </Grid>
+
+    <ScrollViewer x:Name="LearnedPage"
+                  Grid.Row="1"
+                  Margin="0,16,0,0"
+                  VerticalScrollBarVisibility="Auto"
+                  Visibility="{Binding IsLearnedTab, Converter={StaticResource BoolVis}}">
+      <StackPanel>
+          <StackPanel>
+            <TextBlock FontSize="20" FontWeight="SemiBold" Text="What we learned" />
+            <TextBlock Margin="0,8,0,0"
+                       Foreground="{StaticResource Brush.Muted}"
+                       Text="{Binding ExplanationProgressText}" />
+          </StackPanel>
+          <local:MeasuredRpmChart Height="480"
+                                  Margin="0,16,0,0"
+                                  Plot="{Binding RpmPlot}" />
+          <ItemsControl Margin="0,16,0,0" ItemsSource="{Binding ExplanationResults}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Grid Margin="0,0,0,8">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Text="{Binding Name}" />
+                  <TextBlock Grid.Column="1"
+                             Margin="12,0,0,0"
+                             Foreground="{StaticResource Brush.Muted}"
+                             Text="{Binding Value}" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+      </StackPanel>
+    </ScrollViewer>
+
+    <ScrollViewer x:Name="AdvancedPage"
+                  Grid.Row="1"
+                  Margin="0,16,0,0"
+                  VerticalScrollBarVisibility="Auto"
+                  Visibility="{Binding IsAdvancedTab, Converter={StaticResource BoolVis}}">
+      <StackPanel>
+          <StackPanel>
+            <TextBlock FontSize="20" FontWeight="SemiBold" Text="Advanced tests" />
+            <TextBlock Margin="0,8,0,0"
+                       Foreground="{StaticResource Brush.Muted}"
+                       Text="Optional. One Optimize already runs these in order. Use these only to retry a piece." />
+          </StackPanel>
+
+          <StackPanel Margin="0,16,0,0">
+          <TextBlock FontWeight="SemiBold" Text="Baseline" />
+          <TextBlock Margin="0,4,0,0"
+                     Foreground="{StaticResource Brush.Muted}"
+                     Text="Watches temperatures at rest, then everyday heat, then stronger heat. Does not change fan speeds." />
+          <TextBlock Margin="0,4,0,0" Text="{Binding BaselineProgressText}" />
+          <StackPanel Margin="0,4,0,0" Orientation="Horizontal">
+            <Button Content="Run baseline"
+                    Width="140"
+                    Height="34"
+                    Style="{StaticResource SecondaryButton}"
+                    IsEnabled="{Binding CanRunBaseline}"
+                    Click="OnRunBaseline" />
+            <Button Margin="12,0,0,0"
+                    Content="Cancel"
+                    Width="100"
+                    Height="34"
+                    Style="{StaticResource SecondaryButton}"
+                    IsEnabled="{Binding IsBaselineRunning}"
+                    Click="OnCancelBaseline" />
+          </StackPanel>
+          <ItemsControl Margin="0,4,0,0"
+                        ItemsSource="{Binding BaselineResults}"
+                        Visibility="{Binding HasBaselineResults, Converter={StaticResource BoolVis}}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Grid Margin="0,0,0,4">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Text="{Binding Name}" />
+                  <TextBlock Grid.Column="1"
+                             Margin="12,0,0,0"
+                             Foreground="{StaticResource Brush.Muted}"
+                             Text="{Binding Value}" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          </StackPanel>
+
+          <StackPanel Margin="0,16,0,0">
+          <TextBlock FontWeight="SemiBold" Text="Fan tests" />
+          <TextBlock Margin="0,4,0,0"
+                     Foreground="{StaticResource Brush.Muted}"
+                     Text="Speeds up one connected fan at a time, then puts it back on BIOS or the NVIDIA driver." />
+          <TextBlock Margin="0,4,0,0" Text="{Binding FanTestProgressText}" />
+          <StackPanel Margin="0,4,0,0" Orientation="Horizontal">
+            <Button Content="Run fan tests"
+                    Width="140"
+                    Height="34"
+                    Style="{StaticResource SecondaryButton}"
+                    IsEnabled="{Binding CanRunFanTests}"
+                    Click="OnRunFanTests" />
+            <Button Margin="12,0,0,0"
+                    Content="Cancel"
+                    Width="100"
+                    Height="34"
+                    Style="{StaticResource SecondaryButton}"
+                    IsEnabled="{Binding IsFanTestRunning}"
+                    Click="OnCancelFanTests" />
+          </StackPanel>
+          <ItemsControl Margin="0,4,0,0"
+                        ItemsSource="{Binding FanTestResults}"
+                        Visibility="{Binding HasFanTestResults, Converter={StaticResource BoolVis}}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Grid Margin="0,0,0,4">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Text="{Binding Name}" />
+                  <TextBlock Grid.Column="1"
+                             Margin="12,0,0,0"
+                             Foreground="{StaticResource Brush.Muted}"
+                             Text="{Binding Value}" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          </StackPanel>
+
+          <StackPanel Margin="0,16,0,0">
+          <TextBlock FontWeight="SemiBold" Text="Interaction tests" />
+          <TextBlock Margin="0,4,0,0"
+                     Foreground="{StaticResource Brush.Muted}"
+                     Text="Measures two connected fans alone, then together." />
+          <TextBlock Margin="0,4,0,0" Text="{Binding InteractionProgressText}" />
+          <StackPanel Margin="0,4,0,0" Orientation="Horizontal">
+            <Button Content="Run interactions"
+                    Width="140"
+                    Height="34"
+                    Style="{StaticResource SecondaryButton}"
+                    IsEnabled="{Binding CanRunInteractions}"
+                    Click="OnRunInteractions" />
+            <Button Margin="12,0,0,0"
+                    Content="Cancel"
+                    Width="100"
+                    Height="34"
+                    Style="{StaticResource SecondaryButton}"
+                    IsEnabled="{Binding IsInteractionRunning}"
+                    Click="OnCancelInteractions" />
+          </StackPanel>
+          <ItemsControl Margin="0,4,0,0"
+                        ItemsSource="{Binding InteractionResults}"
+                        Visibility="{Binding HasInteractionResults, Converter={StaticResource BoolVis}}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Grid Margin="0,0,0,4">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Text="{Binding Name}" />
+                  <TextBlock Grid.Column="1"
+                             Margin="12,0,0,0"
+                             Foreground="{StaticResource Brush.Muted}"
+                             Text="{Binding Value}" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          </StackPanel>
+
+          <StackPanel Margin="0,16,0,0">
+          <TextBlock FontWeight="SemiBold" Text="Thermal model" />
+          <TextBlock Margin="0,4,0,0" Text="{Binding ModelProgressText}" />
+          <Button Margin="0,4,0,0"
+                  Content="Build thermal model"
+                  Width="180"
+                  Height="34"
+                  HorizontalAlignment="Left"
+                  Style="{StaticResource SecondaryButton}"
+                  IsEnabled="{Binding CanBuildModel}"
+                  Click="OnBuildModel" />
+          <ItemsControl Margin="0,4,0,0"
+                        ItemsSource="{Binding ModelResults}"
+                        Visibility="{Binding HasModelResults, Converter={StaticResource BoolVis}}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Grid Margin="0,0,0,4">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Text="{Binding Name}" />
+                  <TextBlock Grid.Column="1"
+                             Margin="12,0,0,0"
+                             Foreground="{StaticResource Brush.Muted}"
+                             Text="{Binding Value}" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          </StackPanel>
+
+          <StackPanel Margin="0,16,0,0">
+          <TextBlock FontWeight="SemiBold" Text="Diminishing returns" />
+          <TextBlock Margin="0,4,0,0" Text="{Binding DiminishingReturnsProgressText}" />
+          <ItemsControl Margin="0,4,0,0"
+                        ItemsSource="{Binding DiminishingReturnsResults}"
+                        Visibility="{Binding HasDiminishingReturnsResults, Converter={StaticResource BoolVis}}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Grid Margin="0,0,0,4">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Text="{Binding Name}" />
+                  <TextBlock Grid.Column="1"
+                             Margin="12,0,0,0"
+                             Foreground="{StaticResource Brush.Muted}"
+                             Text="{Binding Value}" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          </StackPanel>
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
+</Window>

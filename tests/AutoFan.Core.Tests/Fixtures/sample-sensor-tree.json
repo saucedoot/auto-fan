@@ -1,0 +1,221 @@
+{
+  "Hardware": [
+    {
+      "Id": "/cpu/0",
+      "Name": "Intel Core i7-13700K",
+      "Role": "Cpu",
+      "Sensors": [
+        {
+          "Id": "/cpu/0/temperature/0",
+          "Name": "CPU Package",
+          "Type": "Temperature",
+          "Value": 48,
+          "Index": 0,
+          "HasSoftwareControl": false
+        },
+        {
+          "Id": "/cpu/0/temperature/1",
+          "Name": "CPU Core #1",
+          "Type": "Temperature",
+          "Value": 46,
+          "Index": 1,
+          "HasSoftwareControl": false
+        },
+        {
+          "Id": "/cpu/0/temperature/2",
+          "Name": "Core (Tctl/Tdie)",
+          "Type": "Temperature",
+          "Value": 47,
+          "Index": 2,
+          "HasSoftwareControl": false
+        },
+        {
+          "Id": "/cpu/0/power/0",
+          "Name": "Package",
+          "Type": "Power",
+          "Value": 65,
+          "Index": 0,
+          "HasSoftwareControl": false
+        },
+        {
+          "Id": "/cpu/0/clock/0",
+          "Name": "CPU Core #1",
+          "Type": "Clock",
+          "Value": 4800,
+          "Index": 0,
+          "HasSoftwareControl": false
+        },
+        {
+          "Id": "/cpu/0/load/0",
+          "Name": "CPU Total",
+          "Type": "Load",
+          "Value": 12,
+          "Index": 0,
+          "HasSoftwareControl": false
+        }
+      ],
+      "Children": []
+    },
+    {
+      "Id": "/gpu/0",
+      "Name": "NVIDIA GeForce RTX 4070",
+      "Role": "Gpu",
+      "Sensors": [
+        {
+          "Id": "/gpu/0/temperature/0",
+          "Name": "GPU Core",
+          "Type": "Temperature",
+          "Value": 52,
+          "Index": 0,
+          "HasSoftwareControl": false
+        },
+        {
+          "Id": "/gpu/0/temperature/1",
+          "Name": "GPU Hot Spot",
+          "Type": "Temperature",
+          "Value": 61,
+          "Index": 1,
+          "HasSoftwareControl": false
+        },
+        {
+          "Id": "/gpu/0/power/0",
+          "Name": "GPU Package",
+          "Type": "Power",
+          "Value": 120,
+          "Index": 0,
+          "HasSoftwareControl": false
+        },
+        {
+          "Id": "/gpu/0/clock/0",
+          "Name": "GPU Core",
+          "Type": "Clock",
+          "Value": 2475,
+          "Index": 0,
+          "HasSoftwareControl": false
+        },
+        {
+          "Id": "/gpu/0/load/0",
+          "Name": "GPU Core",
+          "Type": "Load",
+          "Value": 8,
+          "Index": 0,
+          "HasSoftwareControl": false
+        },
+        {
+          "Id": "/gpu/0/fan/0",
+          "Name": "GPU Fan",
+          "Type": "Fan",
+          "Value": 1100,
+          "Index": 0,
+          "HasSoftwareControl": true
+        },
+        {
+          "Id": "/gpu/0/control/0",
+          "Name": "GPU Fan",
+          "Type": "Control",
+          "Value": 40,
+          "Index": 0,
+          "HasSoftwareControl": true
+        }
+      ],
+      "Children": []
+    },
+    {
+      "Id": "/motherboard/0",
+      "Name": "ASUS ROG STRIX Z790-E",
+      "Role": "Motherboard",
+      "Sensors": [
+        {
+          "Id": "/motherboard/0/temperature/0",
+          "Name": "Ambient",
+          "Type": "Temperature",
+          "Value": 24,
+          "Index": 0,
+          "HasSoftwareControl": false
+        },
+        {
+          "Id": "/motherboard/0/temperature/1",
+          "Name": "VRM MOS",
+          "Type": "Temperature",
+          "Value": 44,
+          "Index": 1,
+          "HasSoftwareControl": false
+        },
+        {
+          "Id": "/motherboard/0/temperature/2",
+          "Name": "Motherboard",
+          "Type": "Temperature",
+          "Value": 36,
+          "Index": 2,
+          "HasSoftwareControl": false
+        },
+        {
+          "Id": "/motherboard/0/temperature/3",
+          "Name": "System",
+          "Type": "Temperature",
+          "Value": 33,
+          "Index": 3,
+          "HasSoftwareControl": false
+        },
+        {
+          "Id": "/motherboard/0/temperature/4",
+          "Name": "Chipset",
+          "Type": "Temperature",
+          "Value": null,
+          "Index": 4,
+          "HasSoftwareControl": false
+        }
+      ],
+      "Children": [
+        {
+          "Id": "/lpc/nct6798d",
+          "Name": "Nuvoton NCT6798D",
+          "Role": "SuperIo",
+          "Sensors": [
+            {
+              "Id": "/lpc/nct6798d/fan/1",
+              "Name": "Fan #1",
+              "Type": "Fan",
+              "Value": 820,
+              "Index": 1,
+              "HasSoftwareControl": true
+            },
+            {
+              "Id": "/lpc/nct6798d/control/1",
+              "Name": "Fan Control #1",
+              "Type": "Control",
+              "Value": 35,
+              "Index": 1,
+              "HasSoftwareControl": true
+            },
+            {
+              "Id": "/lpc/nct6798d/fan/2",
+              "Name": "Pump",
+              "Type": "Fan",
+              "Value": 2400,
+              "Index": 2,
+              "HasSoftwareControl": true
+            },
+            {
+              "Id": "/lpc/nct6798d/control/2",
+              "Name": "Fan Control #2",
+              "Type": "Control",
+              "Value": 60,
+              "Index": 2,
+              "HasSoftwareControl": true
+            },
+            {
+              "Id": "/lpc/nct6798d/fan/3",
+              "Name": "Fan #3",
+              "Type": "Fan",
+              "Value": 500,
+              "Index": 3,
+              "HasSoftwareControl": false
+            }
+          ],
+          "Children": []
+        }
+      ]
+    }
+  ]
+}

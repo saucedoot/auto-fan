@@ -1,0 +1,14 @@
+---
+description: "Stay on the current App.md phase. Read and update IMPLEMENTATION.md so later chats do not reinvent the product."
+globs:
+alwaysApply: true
+---
+
+# Implementation path
+
+- Before a non-trivial task, read [AGENTS.md](AGENTS.md), the **Current snapshot** in [IMPLEMENTATION.md](IMPLEMENTATION.md), and the matching section of [App.md](App.md).
+- Implement **only** the agreed versioned slice (v1.1+). Flag later ideas; do not build them. Do not invent P14/P15.
+- Fan writes stay behind restore-on-exit, crash recovery, and abort limits (P3). Never skip that safety floor.
+- Case geometry and manufacturer specs are priors, not ground truth. Never loosen safety ceilings.
+- When a slice finishes or App.md changes: update IMPLEMENTATION.md in the same change (snapshot, coverage map, decision log) and tag the version when the user asks. Follow its direction-change protocol.
+- [AGENTS.md](AGENTS.md) stays short. Do not paste the roadmap into it.
