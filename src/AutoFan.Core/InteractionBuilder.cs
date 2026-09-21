@@ -126,7 +126,7 @@ public static class InteractionBuilder
         var values = new List<double>();
         foreach (InteractionSample sample in pair)
         {
-            if (sample.Step != step)
+            if (sample.Step != step || !sample.Settled)
             {
                 continue;
             }

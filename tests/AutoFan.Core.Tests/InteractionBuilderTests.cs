@@ -32,6 +32,31 @@ public sealed class InteractionBuilderTests
     }
 
     [Fact]
+    public void Build_marks_unsettled_pair_holds_unknown()
+    {
+        IReadOnlyList<InteractionSample> samples = Pair(
+            firstId: "front-intake",
+            firstName: "Front intake",
+            secondId: "top-exhaust",
+            secondName: "Top exhaust",
+            firstCooling: 1.5,
+            secondCooling: 0.7,
+            combinedCooling: 3.8,
+            settled: false);
+
+        IReadOnlyList<InteractionEntry> map = InteractionBuilder.Build(samples);
+        Assert.All(
+            map,
+            entry =>
+            {
+                Assert.Equal(MetricEvidence.Unknown, entry.Evidence);
+                Assert.Null(entry.ResidualCelsius);
+                Assert.Null(entry.FirstDeltaCelsius);
+                Assert.Null(entry.InferredNote);
+            });
+    }
+
+    [Fact]
     public void Build_omits_inferred_note_when_residual_is_inside_none_band()
     {
         IReadOnlyList<InteractionSample> samples = Pair(
@@ -104,18 +129,19 @@ public sealed class InteractionBuilderTests
         double firstCooling,
         double secondCooling,
         double combinedCooling,
-        bool includeCase = true)
+        bool includeCase = true,
+        bool settled = true)
     {
         const double reference = 50;
         DateTimeOffset start = new(2026, 9, 19, 20, 0, 0, TimeSpan.Zero);
         return
         [
-            .. Block(start, firstId, firstName, secondId, secondName, InteractionStep.ReferenceFirst, reference, includeCase),
-            .. Block(start.AddSeconds(45), firstId, firstName, secondId, secondName, InteractionStep.First, reference - firstCooling, includeCase),
-            .. Block(start.AddMinutes(2), firstId, firstName, secondId, secondName, InteractionStep.ReferenceSecond, reference, includeCase),
-            .. Block(start.AddMinutes(2).AddSeconds(45), firstId, firstName, secondId, secondName, InteractionStep.Second, reference - secondCooling, includeCase),
-            .. Block(start.AddMinutes(4), firstId, firstName, secondId, secondName, InteractionStep.ReferenceCombined, reference, includeCase),
-            .. Block(start.AddMinutes(4).AddSeconds(45), firstId, firstName, secondId, secondName, InteractionStep.Combined, reference - combinedCooling, includeCase),
+            .. Block(start, firstId, firstName, secondId, secondName, InteractionStep.ReferenceFirst, reference, includeCase, settled),
+            .. Block(start.AddSeconds(45), firstId, firstName, secondId, secondName, InteractionStep.First, reference - firstCooling, includeCase, settled),
+            .. Block(start.AddMinutes(2), firstId, firstName, secondId, secondName, InteractionStep.ReferenceSecond, reference, includeCase, settled),
+            .. Block(start.AddMinutes(2).AddSeconds(45), firstId, firstName, secondId, secondName, InteractionStep.Second, reference - secondCooling, includeCase, settled),
+            .. Block(start.AddMinutes(4), firstId, firstName, secondId, secondName, InteractionStep.ReferenceCombined, reference, includeCase, settled),
+            .. Block(start.AddMinutes(4).AddSeconds(45), firstId, firstName, secondId, secondName, InteractionStep.Combined, reference - combinedCooling, includeCase, settled),
         ];
     }
 
@@ -127,7 +153,8 @@ public sealed class InteractionBuilderTests
         string secondName,
         InteractionStep step,
         double gpu,
-        bool includeCase)
+        bool includeCase,
+        bool settled)
     {
         int count = step.ToString().StartsWith("Reference", StringComparison.Ordinal)
             ? 1
@@ -142,7 +169,8 @@ public sealed class InteractionBuilderTests
                 secondId,
                 secondName,
                 step,
-                Snapshot(gpu, includeCase)));
+                Snapshot(gpu, includeCase),
+                settled));
         }
 
         return samples;

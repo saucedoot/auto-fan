@@ -211,5 +211,6 @@ public sealed class MeasuredRpmPlotTests
                         "Demo controller",
                         IsControllable: true),
                 ],
-                IsDemoHardware: true));
+                IsDemoHardware: true),
+            Settled: true);
 }

@@ -66,8 +66,8 @@ public sealed class SqliteFanTestStore : IFanTestStore, IDisposable
                 command.CommandText =
                     """
                     INSERT INTO fan_test_sample (
-                        run_id, captured_utc, fan_group_id, fan_group_name, stage, snapshot_json)
-                    VALUES ($run, $captured, $group, $name, $stage, $snapshot);
+                        run_id, captured_utc, fan_group_id, fan_group_name, stage, snapshot_json, settled)
+                    VALUES ($run, $captured, $group, $name, $stage, $snapshot, $settled);
                     """;
                 command.Parameters.AddWithValue("$run", run.Id.ToString("D"));
                 command.Parameters.AddWithValue("$captured", sample.CapturedAt.ToString("O"));
@@ -75,6 +75,7 @@ public sealed class SqliteFanTestStore : IFanTestStore, IDisposable
                 command.Parameters.AddWithValue("$name", sample.FanGroupName);
                 command.Parameters.AddWithValue("$stage", sample.Stage.ToString());
                 command.Parameters.AddWithValue("$snapshot", JsonSerializer.Serialize(sample.Snapshot, JsonOptions));
+                command.Parameters.AddWithValue("$settled", sample.Settled ? 1 : 0);
                 command.ExecuteNonQuery();
             }
 
@@ -184,6 +185,7 @@ public sealed class SqliteFanTestStore : IFanTestStore, IDisposable
                 fan_group_name TEXT NOT NULL,
                 stage TEXT NOT NULL,
                 snapshot_json TEXT NOT NULL,
+                settled INTEGER NOT NULL DEFAULT 0,
                 FOREIGN KEY (run_id) REFERENCES fan_test_run(id)
             );
             CREATE TABLE IF NOT EXISTS influence_entry (
@@ -212,6 +214,27 @@ public sealed class SqliteFanTestStore : IFanTestStore, IDisposable
             );
             """;
         command.ExecuteNonQuery();
+        EnsureColumn("fan_test_sample", "settled", "INTEGER NOT NULL DEFAULT 0");
+    }
+
+    private void EnsureColumn(string table, string column, string sqlType)
+    {
+        using (var inspect = _connection.CreateCommand())
+        {
+            inspect.CommandText = $"PRAGMA table_info({table});";
+            using SqliteDataReader reader = inspect.ExecuteReader();
+            while (reader.Read())
+            {
+                if (string.Equals(reader.GetString(1), column, StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+            }
+        }
+
+        using var alter = _connection.CreateCommand();
+        alter.CommandText = $"ALTER TABLE {table} ADD COLUMN {column} {sqlType};";
+        alter.ExecuteNonQuery();
     }
 
     private FanTestRun Load(Guid id)
@@ -242,7 +265,7 @@ public sealed class SqliteFanTestStore : IFanTestStore, IDisposable
         {
             sampleCommand.CommandText =
                 """
-                SELECT captured_utc, fan_group_id, fan_group_name, stage, snapshot_json
+                SELECT captured_utc, fan_group_id, fan_group_name, stage, snapshot_json, settled
                 FROM fan_test_sample WHERE run_id = $id ORDER BY id;
                 """;
             sampleCommand.Parameters.AddWithValue("$id", idText);
@@ -261,7 +284,13 @@ public sealed class SqliteFanTestStore : IFanTestStore, IDisposable
                     throw new InvalidOperationException("A stored snapshot could not be read.");
                 }
 
-                samples.Add(new FanTestSample(captured, groupId, groupName, stage, snapshot));
+                samples.Add(new FanTestSample(
+                    captured,
+                    groupId,
+                    groupName,
+                    stage,
+                    snapshot,
+                    reader.GetInt32(5) != 0));
             }
         }
 

@@ -47,6 +47,11 @@ public static class FanSpeedCurveBuilder
         var seenRpm = new HashSet<int>();
         foreach (IReadOnlyList<FanTestSample> hold in Holds(samples, groupId))
         {
+            if (!hold.All(static sample => sample.Settled))
+            {
+                continue;
+            }
+
             IReadOnlyList<HardwareSnapshot> snapshots = hold
                 .Select(static sample => sample.Snapshot)
                 .ToArray();
@@ -88,7 +93,7 @@ public static class FanSpeedCurveBuilder
         List<FanTestSample>? current = null;
         foreach (FanTestSample sample in samples)
         {
-            if (!InfluenceMapBuilder.IsSpeedStage(sample.Stage))
+            if (!InfluenceMapBuilder.IsSpeedStage(sample.Stage) || !sample.Settled)
             {
                 continue;
             }
