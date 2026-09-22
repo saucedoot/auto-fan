@@ -126,6 +126,96 @@ public sealed class HeatCalibratorTests
     }
 
     [Fact]
+    public void SeparatesFromLow_skips_when_neither_sensor_is_five_degrees_hotter()
+    {
+        Assert.False(HeatCalibrator.SeparatesFromLow(49, 45, 44, 42));
+        Assert.False(HeatCalibrator.SeparatesFromLow(49.9, 45, 46.9, 42));
+        Assert.False(HeatCalibrator.SeparatesFromLow(null, 45, null, 42));
+        Assert.False(HeatCalibrator.SeparatesFromLow(60, null, 70, null));
+    }
+
+    [Fact]
+    public void SeparatesFromLow_keeps_when_cpu_or_gpu_is_five_degrees_hotter()
+    {
+        Assert.True(HeatCalibrator.SeparatesFromLow(50, 45, 42, 42));
+        Assert.True(HeatCalibrator.SeparatesFromLow(45, 45, 47, 42));
+        Assert.True(HeatCalibrator.SeparatesFromLow(51, 45, 48, 42));
+    }
+
+    [Fact]
+    public void AtHotStop_is_eight_under_abort_not_a_new_floor()
+    {
+        Assert.True(HeatCalibrator.AtHotStop(82, 40, ThermalAbortLimits.Floor));
+        Assert.True(HeatCalibrator.AtHotStop(40, 75, ThermalAbortLimits.Floor));
+        Assert.False(HeatCalibrator.AtHotStop(81, 74, ThermalAbortLimits.Floor));
+        Assert.Equal(90, SafetyLimits.CpuAbortCelsius);
+        Assert.Equal(83, SafetyLimits.GpuAbortCelsius);
+        Assert.Equal(82, SafetyLimits.CpuAbortCelsius - HeatCalibrator.CeilingMarginCelsius);
+        Assert.Equal(75, SafetyLimits.GpuAbortCelsius - HeatCalibrator.CeilingMarginCelsius);
+    }
+
+    [Fact]
+    public async Task RunHot_starts_from_low_raises_gpu_work_and_never_uses_high_cpu()
+    {
+        HeatProfile storedLow = new(HeatProfile.EverydayCpuWorkers, 2560, 1440, 1, 48);
+        var hardware = new FakeHardwareBackend();
+        int frontDuty = DutyOf(hardware, FakeHardwareBackend.FrontFanId);
+        var workload = new FakeWorkloadActuator();
+        var clock = new ManualTimeProvider();
+
+        HeatCalibrationResult result = await HeatCalibrator.RunHotAsync(
+            hardware,
+            workload,
+            storedLow,
+            ThermalAbortLimits.Floor,
+            clock,
+            clock.GetUtcNow(),
+            TimeSpan.FromSeconds(1),
+            Delay(clock),
+            progress: null,
+            CancellationToken.None);
+
+        Assert.Null(result.AbortDetail);
+        Assert.Equal(HeatProfile.EverydayCpuWorkers, result.Profile.CpuWorkers);
+        Assert.True(result.Profile.GpuWorkUnits > storedLow.GpuWorkUnits);
+        Assert.Equal(result.Profile, workload.LockedHot);
+        Assert.Null(workload.LockedLow);
+        Assert.DoesNotContain(WorkloadLevel.High, workload.History);
+        Assert.All(workload.AppliedHot, profile => Assert.Equal(HeatProfile.EverydayCpuWorkers, profile.CpuWorkers));
+        Assert.Empty(workload.AppliedLow);
+        Assert.Equal(frontDuty, DutyOf(hardware, FakeHardwareBackend.FrontFanId));
+        Assert.False(hardware.HasActiveSoftwareControl);
+    }
+
+    [Fact]
+    public async Task RunHot_stops_increasing_about_eight_under_cpu_or_gpu_abort()
+    {
+        HeatProfile storedLow = new(HeatProfile.EverydayCpuWorkers, 2560, 1440, 1, 48);
+        var hardware = new FakeHardwareBackend();
+        hardware.OverrideTemperature(FakeHardwareBackend.CpuSensorId, 82);
+        hardware.OverrideTemperature(FakeHardwareBackend.GpuSensorId, 75);
+        var workload = new FakeWorkloadActuator();
+        var clock = new ManualTimeProvider();
+
+        HeatCalibrationResult result = await HeatCalibrator.RunHotAsync(
+            hardware,
+            workload,
+            storedLow,
+            ThermalAbortLimits.Floor,
+            clock,
+            clock.GetUtcNow(),
+            TimeSpan.FromSeconds(1),
+            Delay(clock),
+            progress: null,
+            CancellationToken.None);
+
+        Assert.Null(result.AbortDetail);
+        Assert.Equal(storedLow with { CpuWorkers = HeatProfile.EverydayCpuWorkers }, result.Profile);
+        Assert.Single(workload.AppliedHot);
+        Assert.DoesNotContain(WorkloadLevel.High, workload.History);
+    }
+
+    [Fact]
     public async Task Run_aborts_when_the_gpu_device_is_lost()
     {
         var hardware = new FakeHardwareBackend();

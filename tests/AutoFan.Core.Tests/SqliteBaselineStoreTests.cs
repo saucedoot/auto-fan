@@ -113,6 +113,7 @@ public sealed class SqliteBaselineStoreTests
             Assert.NotNull(loaded);
             Assert.Null(loaded.EverydayProfile);
             Assert.Null(loaded.LowProfile);
+            Assert.Null(loaded.HotProfile);
             Assert.NotEqual(HeatProfile.DefaultLow, loaded.LowProfile);
         }
         finally
@@ -186,5 +187,47 @@ public sealed class SqliteBaselineStoreTests
         Assert.Equal(expected.Metrics[0].Value, actual.Metrics[0].Value);
         Assert.Equal(expected.EverydayProfile, actual.EverydayProfile);
         Assert.Equal(expected.LowProfile, actual.LowProfile);
+        Assert.Equal(expected.HotProfile, actual.HotProfile);
+    }
+
+    [Fact]
+    public void Missing_hot_after_a_skip_loads_null_not_an_error()
+    {
+        using var store = new SqliteBaselineStore("Data Source=:memory:");
+        HeatProfile low = new(HeatProfile.EverydayCpuWorkers, 2560, 1440, 1, 48);
+        BaselineRun original = SampleRun(ambient: 21.0, evidence: MetricEvidence.Measured) with
+        {
+            EverydayProfile = HeatProfile.Everyday,
+            LowProfile = low,
+            HotProfile = null,
+        };
+
+        store.Save(original);
+        BaselineRun? loaded = store.GetLatest();
+
+        Assert.NotNull(loaded);
+        Assert.Null(loaded.HotProfile);
+        Assert.Equal(low, loaded.LowProfile);
+    }
+
+    [Fact]
+    public void UpdateHotProfile_persists_only_when_hot_was_kept()
+    {
+        using var store = new SqliteBaselineStore("Data Source=:memory:");
+        HeatProfile low = new(HeatProfile.EverydayCpuWorkers, 2560, 1440, 1, 48);
+        HeatProfile hot = new(HeatProfile.EverydayCpuWorkers, 2560, 1440, 8, 128);
+        store.Save(SampleRun(ambient: 21.0, evidence: MetricEvidence.Measured) with
+        {
+            EverydayProfile = HeatProfile.Everyday,
+            LowProfile = low,
+        });
+
+        store.UpdateHotProfile(hot);
+        BaselineRun? loaded = store.GetLatest();
+
+        Assert.NotNull(loaded);
+        Assert.Equal(hot, loaded.HotProfile);
+        Assert.Equal(low, loaded.LowProfile);
+        Assert.NotEqual(HeatProfile.DefaultLow, loaded.HotProfile);
     }
 }

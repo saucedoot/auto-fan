@@ -11,6 +11,8 @@ public interface IWorkloadActuator : IDisposable
 
     HeatProfile? LockedLow { get; }
 
+    HeatProfile? LockedHot { get; }
+
     bool HasFault { get; }
 
     /// <summary>
@@ -23,6 +25,13 @@ public interface IWorkloadActuator : IDisposable
     void ApplyLow(HeatProfile profile);
 
     void ApplyEveryday(HeatProfile profile);
+
+    void ApplyHot(HeatProfile profile);
+
+    /// <summary>
+    /// Drop a Hot lamp that did not separate. Does not clear Everyday or Low.
+    /// </summary>
+    void DiscardHot();
 
     void Stop();
 }

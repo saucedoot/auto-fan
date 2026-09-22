@@ -12,6 +12,8 @@ internal sealed class FakeWorkloadActuator : IWorkloadActuator
 
     public IReadOnlyList<HeatProfile> AppliedEveryday => _appliedEveryday;
 
+    public IReadOnlyList<HeatProfile> AppliedHot => _appliedHot;
+
     public int StopCount { get; private set; }
 
     public bool GpuLoadAvailable { get; set; } = true;
@@ -20,13 +22,18 @@ internal sealed class FakeWorkloadActuator : IWorkloadActuator
 
     public HeatProfile? LockedLow { get; private set; }
 
+    public HeatProfile? LockedHot { get; private set; }
+
     public bool HasFault { get; set; }
 
     public Action<HeatProfile>? OnApplyLow { get; set; }
 
+    public Action<HeatProfile>? OnApplyHot { get; set; }
+
     private readonly List<WorkloadLevel> _history = [];
     private readonly List<HeatProfile> _applied = [];
     private readonly List<HeatProfile> _appliedEveryday = [];
+    private readonly List<HeatProfile> _appliedHot = [];
 
     public void Set(WorkloadLevel level)
     {
@@ -65,6 +72,19 @@ internal sealed class FakeWorkloadActuator : IWorkloadActuator
         LockedEveryday = profile;
         _appliedEveryday.Add(profile);
         _history.Add(WorkloadLevel.Everyday);
+    }
+
+    public void ApplyHot(HeatProfile profile)
+    {
+        Current = WorkloadLevel.Low;
+        LockedHot = profile;
+        _appliedHot.Add(profile);
+        OnApplyHot?.Invoke(profile);
+    }
+
+    public void DiscardHot()
+    {
+        LockedHot = null;
     }
 
     public void Stop()
