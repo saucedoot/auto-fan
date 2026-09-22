@@ -791,7 +791,7 @@ public sealed class FanTestRunner
                 0,
                 movers.Count,
                 FanTestStage.Reference,
-                update.Snapshot,
+                update.Latest,
                 update.Message)));
         HeatCalibrationResult calibration = await HeatCalibrator.RunHotAsync(
             _hardware,
