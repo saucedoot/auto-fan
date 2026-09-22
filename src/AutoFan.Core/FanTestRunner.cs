@@ -18,6 +18,8 @@ public sealed class FanTestRunner
     private readonly HeatProfile? _everydayHeat;
     private readonly bool _everydayGpuHeatUseful;
     private readonly BaselineRun? _baseline;
+    private readonly IBaselineStore? _baselineStore;
+    private readonly bool _runHot;
 
     public FanTestRunner(
         IHardwareBackend hardware,
@@ -34,7 +36,9 @@ public sealed class FanTestRunner
         HeatProfile? lowHeat = null,
         HeatProfile? everydayHeat = null,
         bool everydayGpuHeatUseful = false,
-        BaselineRun? baseline = null)
+        BaselineRun? baseline = null,
+        IBaselineStore? baselineStore = null,
+        bool runHot = true)
     {
         _hardware = hardware ?? throw new ArgumentNullException(nameof(hardware));
         _workload = workload ?? throw new ArgumentNullException(nameof(workload));
@@ -51,6 +55,8 @@ public sealed class FanTestRunner
         _everydayHeat = everydayHeat;
         _everydayGpuHeatUseful = everydayGpuHeatUseful;
         _baseline = baseline;
+        _baselineStore = baselineStore;
+        _runHot = runHot;
     }
 
     public async Task<FanTestRun> RunAsync(
@@ -267,6 +273,29 @@ public sealed class FanTestRunner
                     skipped,
                     FanTestRunStatus.Aborted,
                     everydayFatal);
+            }
+
+            string? hotFatal = !_runHot
+                ? null
+                : await TryHotAsync(
+                samples,
+                unknown,
+                skipped,
+                lowMap,
+                progress,
+                cancellationToken).ConfigureAwait(false);
+            if (hotFatal is not null)
+            {
+                _workload.Stop();
+                _hardware.RestoreDefaults();
+                return Persist(
+                    id,
+                    startedAt,
+                    samples,
+                    unknown,
+                    skipped,
+                    FanTestRunStatus.Aborted,
+                    hotFatal);
             }
 
             _workload.Stop();
@@ -718,6 +747,208 @@ public sealed class FanTestRunner
         return null;
     }
 
+    private async Task<string?> TryHotAsync(
+        List<FanTestSample> samples,
+        List<InfluenceEntry> unknown,
+        List<SkippedFanGroup> skipped,
+        IReadOnlyList<InfluenceEntry> lowInfluence,
+        IProgress<FanTestProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyList<FanGroup> movers = LowMovers(lowInfluence);
+        if (movers.Count == 0)
+        {
+            return null;
+        }
+
+        _workload.Stop();
+        _hardware.RestoreDefaults();
+        DateTimeOffset stageStartedAt = _clock.GetUtcNow();
+
+        string? waitAbort = await WaitToCoolAsync(stageStartedAt, progress, cancellationToken).ConfigureAwait(false);
+        if (waitAbort is not null)
+        {
+            return IsExtraHeatStageSkip(waitAbort) ? null : waitAbort;
+        }
+
+        if (_lowHeat is not HeatProfile lowHeat)
+        {
+            return null;
+        }
+
+        progress?.Report(new FanTestProgress(
+            string.Empty,
+            string.Empty,
+            0,
+            movers.Count,
+            FanTestStage.Reference,
+            _hardware.ReadSnapshot(),
+            "Finding a hotter heat this PC can use. Fans stay on BIOS."));
+        var calibrationProgress = new Progress<BaselineProgress>(update =>
+            progress?.Report(new FanTestProgress(
+                string.Empty,
+                string.Empty,
+                0,
+                movers.Count,
+                FanTestStage.Reference,
+                update.Latest,
+                update.Message)));
+        HeatCalibrationResult calibration = await HeatCalibrator.RunHotAsync(
+            _hardware,
+            _workload,
+            lowHeat,
+            _limits,
+            _clock,
+            stageStartedAt,
+            _schedule.SamplePeriod,
+            _delay,
+            calibrationProgress,
+            cancellationToken).ConfigureAwait(false);
+        if (calibration.AbortDetail is not null)
+        {
+            _workload.DiscardHot();
+            _workload.Stop();
+            _hardware.RestoreDefaults();
+            return IsExtraHeatStageSkip(calibration.AbortDetail) ? null : calibration.AbortDetail;
+        }
+
+        _workload.ApplyHot(calibration.Profile);
+        FanGroup settleGroup = FindGroup(movers[0].Id) ?? movers[0];
+        progress?.Report(new FanTestProgress(
+            settleGroup.Id,
+            settleGroup.Name,
+            0,
+            movers.Count,
+            FanTestStage.Reference,
+            _hardware.ReadSnapshot(),
+            "Sitting on BIOS at hotter heat. Checking whether temperatures sit clearly above Low."));
+        string? settleAbort = await SampleAsync(
+            settleGroup,
+            0,
+            movers.Count,
+            FanTestStage.Reference,
+            stageStartedAt,
+            HeatId.Hot,
+            samples,
+            session: null,
+            progress,
+            cancellationToken).ConfigureAwait(false);
+        if (settleAbort is not null)
+        {
+            _workload.DiscardHot();
+            _workload.Stop();
+            _hardware.RestoreDefaults();
+            return IsExtraHeatStageSkip(settleAbort) ? null : settleAbort;
+        }
+
+        (double? hotCpu, double? hotGpu) = LastSettledBiosTemps(samples, HeatId.Hot);
+        (double? lowCpu, double? lowGpu) = LowBiosTemps(samples);
+        if (!HeatCalibrator.SeparatesFromLow(hotCpu, lowCpu, hotGpu, lowGpu))
+        {
+            _workload.DiscardHot();
+            _workload.Stop();
+            _hardware.RestoreDefaults();
+            progress?.Report(new FanTestProgress(
+                string.Empty,
+                string.Empty,
+                0,
+                movers.Count,
+                FanTestStage.Reference,
+                _hardware.ReadSnapshot(),
+                "Hotter heat did not sit clearly above Low, so that band stays Unknown."));
+            return null;
+        }
+
+        _baselineStore?.UpdateHotProfile(calibration.Profile);
+        bool hotGpuUseful = GpuHeat.HotIsUseful(hotGpu, IdleGpuCelsius());
+        var testedDuties = new Dictionary<string, HashSet<int>>(StringComparer.Ordinal);
+        var hotCandidates = new List<FanGroup>();
+        foreach (FanGroup mover in movers)
+        {
+            FanGroup live = FindGroup(mover.Id) ?? mover;
+            if (!hotGpuUseful && FanWriteCandidates.IsWritableNvidiaGpuFan(live))
+            {
+                skipped.Add(new SkippedFanGroup(
+                    live.Id,
+                    live.Name,
+                    FanTestReasons.GpuHeatInsufficient));
+                continue;
+            }
+
+            hotCandidates.Add(live);
+        }
+
+        for (int index = 0; index < hotCandidates.Count; index++)
+        {
+            FanGroup group = hotCandidates[index];
+            progress?.Report(new FanTestProgress(
+                group.Id,
+                group.Name,
+                index + 1,
+                hotCandidates.Count,
+                FanTestStage.Screen,
+                _hardware.ReadSnapshot(),
+                Describe(group.Name, index + 1, hotCandidates.Count, FanTestStage.Screen, HeatId.Hot)));
+            string? abort = await TestGroupAsync(
+                group,
+                index,
+                hotCandidates.Count,
+                FanTestSchedule.ScreenDuties,
+                FanTestStage.Screen,
+                captureReference: true,
+                stageStartedAt,
+                HeatId.Hot,
+                samples,
+                unknown,
+                skipped,
+                testedDuties,
+                progress,
+                cancellationToken).ConfigureAwait(false);
+            if (abort is not null)
+            {
+                return IsExtraHeatStageSkip(abort) ? null : abort;
+            }
+        }
+
+        IReadOnlyList<InfluenceEntry> hotPreview = ApplyHotGates(
+            InfluenceMapBuilder.Build(ForHeat(samples, HeatId.Hot), _stability),
+            hotGpuUseful);
+        var refine = new List<FanGroup>();
+        foreach (FanGroup group in hotCandidates)
+        {
+            if (InfluenceMapBuilder.MovedATemperature(hotPreview, group.Id))
+            {
+                refine.Add(FindGroup(group.Id) ?? group);
+            }
+        }
+
+        for (int index = 0; index < refine.Count; index++)
+        {
+            FanGroup group = refine[index];
+            string? abort = await TestGroupAsync(
+                group,
+                index,
+                refine.Count,
+                FanTestSchedule.RefineDuties,
+                FanTestStage.Refine,
+                captureReference: false,
+                stageStartedAt,
+                HeatId.Hot,
+                samples,
+                unknown,
+                skipped,
+                testedDuties,
+                progress,
+                cancellationToken).ConfigureAwait(false);
+            if (abort is not null)
+            {
+                return IsExtraHeatStageSkip(abort) ? null : abort;
+            }
+        }
+
+        return null;
+    }
+
     private IReadOnlyList<FanGroup> LowMovers(IReadOnlyList<InfluenceEntry> lowInfluence)
     {
         var movers = new List<FanGroup>();
@@ -757,7 +988,10 @@ public sealed class FanTestRunner
     private static IReadOnlyList<FanTestSample> ForHeat(IReadOnlyList<FanTestSample> samples, HeatId heatId) =>
         samples.Where(sample => sample.HeatId == heatId).ToArray();
 
-    private static bool IsEverydayStageSkip(string abort)
+    private static bool IsEverydayStageSkip(string abort) =>
+        IsExtraHeatStageSkip(abort);
+
+    private static bool IsExtraHeatStageSkip(string abort)
     {
         if (abort.Contains("minute abort limit", StringComparison.Ordinal)
             || abort.Contains("stayed above", StringComparison.Ordinal))
@@ -781,6 +1015,81 @@ public sealed class FanTestRunner
         }
 
         return ReferenceStability.WithoutUnusableTargets(gated, _stability);
+    }
+
+    private IReadOnlyList<InfluenceEntry> ApplyHotGates(
+        IReadOnlyList<InfluenceEntry> entries,
+        bool hotGpuUseful)
+    {
+        IReadOnlyList<InfluenceEntry> gated = entries;
+        if (!hotGpuUseful)
+        {
+            gated = InfluenceMapBuilder.WithoutGpuTargets(gated, FanTestReasons.GpuHeatInsufficient);
+        }
+
+        return ReferenceStability.WithoutUnusableTargets(gated, _stability);
+    }
+
+    private static (double? Cpu, double? Gpu) LastSettledBiosTemps(
+        IReadOnlyList<FanTestSample> samples,
+        HeatId heatId)
+    {
+        for (int index = samples.Count - 1; index >= 0; index--)
+        {
+            FanTestSample sample = samples[index];
+            if (sample.HeatId != heatId
+                || sample.Stage != FanTestStage.Reference
+                || !sample.Settled)
+            {
+                continue;
+            }
+
+            return (
+                PreferredTemperature.Read(sample.Snapshot, SensorKind.CpuTemperature),
+                PreferredTemperature.Read(sample.Snapshot, SensorKind.GpuTemperature));
+        }
+
+        return (null, null);
+    }
+
+    private (double? Cpu, double? Gpu) LowBiosTemps(IReadOnlyList<FanTestSample> samples)
+    {
+        (double? cpu, double? gpu) = LastSettledBiosTemps(samples, HeatId.Low);
+        if (cpu is not null || gpu is not null)
+        {
+            return (cpu, gpu);
+        }
+
+        if (ReferenceStability.FromBaseline(_baseline) is not ReferenceAssessment assessment)
+        {
+            return (null, null);
+        }
+
+        return (
+            assessment.Cpu.Holds.Count > 0 ? assessment.Cpu.Holds[^1] : null,
+            assessment.Gpu.Holds.Count > 0 ? assessment.Gpu.Holds[^1] : null);
+    }
+
+    private double? IdleGpuCelsius()
+    {
+        if (_baseline is null)
+        {
+            return null;
+        }
+
+        for (int index = _baseline.Samples.Count - 1; index >= 0; index--)
+        {
+            if (_baseline.Samples[index].Phase != BaselinePhase.Idle)
+            {
+                continue;
+            }
+
+            return PreferredTemperature.Read(
+                _baseline.Samples[index].Snapshot,
+                SensorKind.GpuTemperature);
+        }
+
+        return null;
     }
 
     private IReadOnlyList<InfluenceEntry> ApplyGates(IReadOnlyList<InfluenceEntry> entries)
@@ -858,9 +1167,12 @@ public sealed class FanTestRunner
         string priorNote = CaseZoneMatcher.FromName(name) == CaseZone.Unknown
             ? string.Empty
             : " The case prior expected this header to matter; it still gets a real measurement.";
-        string heatNote = heatId == HeatId.Everyday
-            ? " Everyday heat is on. "
-            : " ";
+        string heatNote = heatId switch
+        {
+            HeatId.Everyday => " Everyday heat is on. ",
+            HeatId.Hot => " Hot heat is on. ",
+            _ => " ",
+        };
         return stage switch
         {
             FanTestStage.Reference when heatId == HeatId.Idle =>

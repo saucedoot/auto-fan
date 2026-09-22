@@ -31,4 +31,18 @@ public sealed class InMemoryBaselineStore : IBaselineStore
             return _runs.ToArray();
         }
     }
+
+    public void UpdateHotProfile(HeatProfile profile)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        lock (_gate)
+        {
+            if (_runs.Count == 0)
+            {
+                return;
+            }
+
+            _runs[^1] = _runs[^1] with { HotProfile = profile };
+        }
+    }
 }

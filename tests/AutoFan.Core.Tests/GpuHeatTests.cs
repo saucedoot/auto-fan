@@ -41,4 +41,13 @@ public sealed class GpuHeatTests
 
         Assert.True(GpuHeat.EverydayIsUseful(run));
     }
+
+    [Fact]
+    public void Hot_gpu_is_useful_only_when_it_is_fifteen_above_idle()
+    {
+        Assert.False(GpuHeat.HotIsUseful(56.9, 42));
+        Assert.True(GpuHeat.HotIsUseful(57, 42));
+        Assert.False(GpuHeat.HotIsUseful(60, null));
+        Assert.False(GpuHeat.HotIsUseful(null, 42));
+    }
 }

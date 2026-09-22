@@ -9,6 +9,7 @@ public sealed class SyntheticWorkloadActuator : IWorkloadActuator
     private GpuWorkload? _gpu;
     private HeatProfile? _lockedEveryday;
     private HeatProfile? _lockedLow;
+    private HeatProfile? _lockedHot;
     private WorkloadLevel _level = WorkloadLevel.Idle;
     private bool _disposed;
 
@@ -38,6 +39,17 @@ public sealed class SyntheticWorkloadActuator : IWorkloadActuator
             lock (_gate)
             {
                 return _lockedLow;
+            }
+        }
+    }
+
+    public HeatProfile? LockedHot
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _lockedHot;
             }
         }
     }
@@ -117,6 +129,23 @@ public sealed class SyntheticWorkloadActuator : IWorkloadActuator
         }
     }
 
+    public void ApplyHot(HeatProfile profile)
+    {
+        lock (_gate)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            ApplyHotLocked(profile);
+        }
+    }
+
+    public void DiscardHot()
+    {
+        lock (_gate)
+        {
+            _lockedHot = null;
+        }
+    }
+
     public void Stop()
     {
         lock (_gate)
@@ -145,6 +174,14 @@ public sealed class SyntheticWorkloadActuator : IWorkloadActuator
     private void ApplyLowLocked(HeatProfile profile)
     {
         _lockedLow = profile;
+        _cpu.SetWorkers(profile.CpuWorkers);
+        _gpu?.Set(profile);
+        _level = WorkloadLevel.Low;
+    }
+
+    private void ApplyHotLocked(HeatProfile profile)
+    {
+        _lockedHot = profile;
         _cpu.SetWorkers(profile.CpuWorkers);
         _gpu?.Set(profile);
         _level = WorkloadLevel.Low;

@@ -11,4 +11,5 @@ public sealed record BaselineRun(
     IReadOnlyList<BaselineSample> Samples,
     IReadOnlyList<BaselineMetric> Metrics,
     HeatProfile? EverydayProfile = null,
-    HeatProfile? LowProfile = null);
+    HeatProfile? LowProfile = null,
+    HeatProfile? HotProfile = null);

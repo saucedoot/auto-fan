@@ -48,8 +48,8 @@ public sealed class SqliteBaselineStore : IBaselineStore, IDisposable
                     """
                     INSERT INTO baseline_run (
                         id, started_utc, finished_utc, status, abort_detail, ambient_celsius, gpu_load_available,
-                        everyday_heat_json, low_heat_json)
-                    VALUES ($id, $started, $finished, $status, $abort, $ambient, $gpu, $everyday, $low);
+                        everyday_heat_json, low_heat_json, hot_heat_json)
+                    VALUES ($id, $started, $finished, $status, $abort, $ambient, $gpu, $everyday, $low, $hot);
                     """;
                 command.Parameters.AddWithValue("$id", run.Id.ToString("D"));
                 command.Parameters.AddWithValue("$started", run.StartedAt.ToString("O"));
@@ -60,6 +60,7 @@ public sealed class SqliteBaselineStore : IBaselineStore, IDisposable
                 command.Parameters.AddWithValue("$gpu", run.GpuLoadAvailable ? 1 : 0);
                 command.Parameters.AddWithValue("$everyday", ToHeatJson(run.EverydayProfile));
                 command.Parameters.AddWithValue("$low", ToHeatJson(run.LowProfile));
+                command.Parameters.AddWithValue("$hot", ToHeatJson(run.HotProfile));
                 command.ExecuteNonQuery();
             }
 
@@ -135,6 +136,30 @@ public sealed class SqliteBaselineStore : IBaselineStore, IDisposable
         }
     }
 
+    public void UpdateHotProfile(HeatProfile profile)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        lock (_gate)
+        {
+            BaselineRun? latest = GetLatest();
+            if (latest is null)
+            {
+                return;
+            }
+
+            using var command = _connection.CreateCommand();
+            command.CommandText =
+                """
+                UPDATE baseline_run
+                SET hot_heat_json = $hot
+                WHERE id = $id;
+                """;
+            command.Parameters.AddWithValue("$hot", ToHeatJson(profile));
+            command.Parameters.AddWithValue("$id", latest.Id.ToString("D"));
+            command.ExecuteNonQuery();
+        }
+    }
+
     public void Dispose() => _connection.Dispose();
 
     private void EnsureSchema()
@@ -151,7 +176,8 @@ public sealed class SqliteBaselineStore : IBaselineStore, IDisposable
                 ambient_celsius REAL,
                 gpu_load_available INTEGER NOT NULL,
                 everyday_heat_json TEXT,
-                low_heat_json TEXT
+                low_heat_json TEXT,
+                hot_heat_json TEXT
             );
             CREATE TABLE IF NOT EXISTS baseline_sample (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -174,6 +200,7 @@ public sealed class SqliteBaselineStore : IBaselineStore, IDisposable
         command.ExecuteNonQuery();
         EnsureColumn("baseline_run", "everyday_heat_json", "TEXT");
         EnsureColumn("baseline_run", "low_heat_json", "TEXT");
+        EnsureColumn("baseline_run", "hot_heat_json", "TEXT");
     }
 
     private void EnsureColumn(string table, string column, string sqlType)
@@ -203,7 +230,7 @@ public sealed class SqliteBaselineStore : IBaselineStore, IDisposable
         runCommand.CommandText =
             """
             SELECT started_utc, finished_utc, status, abort_detail, ambient_celsius, gpu_load_available,
-                   everyday_heat_json, low_heat_json
+                   everyday_heat_json, low_heat_json, hot_heat_json
             FROM baseline_run WHERE id = $id;
             """;
         runCommand.Parameters.AddWithValue("$id", idText);
@@ -221,6 +248,7 @@ public sealed class SqliteBaselineStore : IBaselineStore, IDisposable
         bool gpu = runReader.GetInt32(5) != 0;
         HeatProfile? everyday = ReadHeat(runReader, 6);
         HeatProfile? low = ReadHeat(runReader, 7);
+        HeatProfile? hot = runReader.FieldCount > 8 ? ReadHeat(runReader, 8) : null;
         runReader.Close();
 
         var samples = new List<BaselineSample>();
@@ -278,7 +306,8 @@ public sealed class SqliteBaselineStore : IBaselineStore, IDisposable
             samples,
             metrics,
             everyday,
-            low);
+            low,
+            hot);
     }
 
     private static object ToHeatJson(HeatProfile? profile) =>

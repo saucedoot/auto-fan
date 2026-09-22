@@ -55,4 +55,24 @@ public sealed class SyntheticWorkloadActuatorTests
 
         Assert.Equal(stored, actuator.LockedEveryday);
     }
+
+    [Fact]
+    public void Apply_hot_does_not_overwrite_low_and_discard_clears_only_hot()
+    {
+        using var actuator = new SyntheticWorkloadActuator();
+        HeatProfile low = new(HeatProfile.EverydayCpuWorkers, 2560, 1440, 1, 48);
+        HeatProfile hot = new(HeatProfile.EverydayCpuWorkers, 2560, 1440, 4, 128);
+        Assert.Equal(HeatProfile.EverydayCpuWorkers, hot.CpuWorkers);
+
+        actuator.ApplyLow(low);
+        actuator.ApplyHot(hot);
+
+        Assert.Equal(low, actuator.LockedLow);
+        Assert.Equal(hot, actuator.LockedHot);
+
+        actuator.DiscardHot();
+
+        Assert.Null(actuator.LockedHot);
+        Assert.Equal(low, actuator.LockedLow);
+    }
 }
