@@ -52,6 +52,30 @@ public sealed class FanSpeedCurveBuilderTests
     }
 
     [Fact]
+    public void Build_keeps_each_heat_on_its_own_curve()
+    {
+        DateTimeOffset start = new(2026, 9, 21, 2, 0, 0, TimeSpan.Zero);
+        FanTestSample[] samples =
+        [
+            .. Hold(start, 70, 1400, 62.0, FanTestStage.Screen),
+            .. Hold(start.AddMinutes(1), 100, 1800, 60.0, FanTestStage.Screen),
+            .. Hold(start.AddMinutes(2), 40, 900, 50.0, FanTestStage.Screen, heat: HeatId.Everyday),
+        ];
+
+        IReadOnlyList<FanSpeedCurve> curves = FanSpeedCurveBuilder.Build(samples);
+
+        FanSpeedCurve low = Assert.Single(
+            curves,
+            curve => curve.Target == InfluenceTarget.Cpu && curve.Heat == HeatId.Low);
+        FanSpeedCurve everyday = Assert.Single(
+            curves,
+            curve => curve.Target == InfluenceTarget.Cpu && curve.Heat == HeatId.Everyday);
+        Assert.Equal([1400, 1800], low.Points.Select(static point => point.Rpm).ToArray());
+        Assert.Equal([900], everyday.Points.Select(static point => point.Rpm).ToArray());
+        Assert.DoesNotContain(low.Points, static point => point.TempCelsius < 55);
+    }
+
+    [Fact]
     public void Empty_samples_yield_no_curves()
     {
         Assert.Empty(FanSpeedCurveBuilder.Build([]));
@@ -81,12 +105,13 @@ public sealed class FanSpeedCurveBuilderTests
         double rpm,
         double cpu,
         FanTestStage stage,
-        bool settled = true)
+        bool settled = true,
+        HeatId heat = HeatId.Low)
     {
         var samples = new FanTestSample[ThermalDynamics.SettleWindowSamples];
         for (int index = 0; index < samples.Length; index++)
         {
-            samples[index] = Sample(start.AddSeconds(index), duty, rpm, cpu, stage, settled);
+            samples[index] = Sample(start.AddSeconds(index), duty, rpm, cpu, stage, settled, heat);
         }
 
         return samples;
@@ -98,7 +123,8 @@ public sealed class FanSpeedCurveBuilderTests
         double rpm,
         double cpu,
         FanTestStage stage,
-        bool settled = true) =>
+        bool settled = true,
+        HeatId heat = HeatId.Low) =>
         new(
             at,
             FakeHardwareBackend.FrontFanId,
@@ -120,5 +146,6 @@ public sealed class FanSpeedCurveBuilderTests
                         IsControllable: true),
                 ],
                 IsDemoHardware: true),
-            settled);
+            settled,
+            heat);
 }

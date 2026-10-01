@@ -45,8 +45,23 @@ public sealed class BaselineRunnerTests
             workload.History);
         Assert.NotNull(workload.LockedLow);
         Assert.Equal(HeatProfile.EverydayCpuWorkers, workload.LockedLow.CpuWorkers);
-        Assert.Equal(HeatProfile.Everyday, run.EverydayProfile);
+        Assert.Equal(HeatProfile.CpuOnly, run.EverydayProfile);
+        Assert.NotNull(run.EverydayProfile);
+        Assert.Equal(0, run.EverydayProfile.GpuPasses);
         Assert.Equal(workload.LockedLow, run.LowProfile);
+        HeatAnchor cpu = run.HeatAnchors.Single(anchor => anchor.Kind == HeatAnchorKind.Cpu);
+        HeatAnchor gpu = run.HeatAnchors.Single(anchor => anchor.Kind == HeatAnchorKind.Gpu);
+        HeatAnchor mixed = run.HeatAnchors.Single(anchor => anchor.Kind == HeatAnchorKind.Mixed);
+        Assert.Equal(HeatProfile.EverydayCpuWorkers, cpu.Profile.CpuWorkers);
+        Assert.Equal(0, cpu.Profile.GpuPasses);
+        Assert.Equal(HeatProfile.GpuRasterCpuWorkers, gpu.Profile.CpuWorkers);
+        Assert.Equal(HeatProfile.EverydayCpuWorkers, mixed.Profile.CpuWorkers);
+        Assert.Equal(gpu.Profile.GpuPasses, mixed.Profile.GpuPasses);
+        Assert.Equal(mixed.Profile, run.LowProfile);
+        Assert.NotNull(gpu.GpuRiseCelsius);
+        Assert.True(gpu.GpuRiseCelsius < HeatCalibrator.TargetRiseCelsius);
+        Assert.True(gpu.IsMeasured);
+        Assert.Contains(run.Samples, sample => sample.Phase == BaselinePhase.Gpu);
         Assert.NotNull(run.LowProfile);
         Assert.DoesNotContain(WorkloadLevel.High, workload.History);
         Assert.True(workload.StopCount >= 1);
@@ -58,6 +73,20 @@ public sealed class BaselineRunnerTests
             metric => metric.Name == BaselineMetricNames.AmbientCelsius
                 && metric.Evidence == MetricEvidence.Measured
                 && metric.Value == 23);
+    }
+
+    [Fact]
+    public void A_gpu_rise_of_fifteen_degrees_is_not_a_measured_anchor()
+    {
+        Assert.True(HeatCalibrator.GpuRiseMet(30, 46));
+        var anchor = new HeatAnchor(
+            HeatAnchorKind.Gpu,
+            HeatProfile.GpuStart,
+            HoldAssessment.TimedOut,
+            Reference: null,
+            GpuRiseCelsius: 16);
+
+        Assert.False(anchor.IsMeasured);
     }
 
     [Fact]

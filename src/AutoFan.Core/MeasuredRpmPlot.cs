@@ -60,13 +60,20 @@ public sealed record MeasuredRpmPlot(
     public string RecommendedLabel =>
         RecommendedRpm is double rpm ? $"Recommended  {rpm:0} RPM" : string.Empty;
 
-    public static IReadOnlyList<MeasuredRpmFanChoice> FanChoices(IReadOnlyList<FanSpeedCurve> curves)
+    public static IReadOnlyList<MeasuredRpmFanChoice> FanChoices(
+        IReadOnlyList<FanSpeedCurve> curves,
+        HeatId heat = HeatId.Low)
     {
         ArgumentNullException.ThrowIfNull(curves);
 
         var choices = new List<MeasuredRpmFanChoice>();
         foreach (FanSpeedCurve curve in curves)
         {
+            if (curve.Heat != heat)
+            {
+                continue;
+            }
+
             if (!IsPlotTarget(curve.Target)
                 || curve.Points.Count == 0
                 || choices.Any(choice => string.Equals(choice.FanGroupId, curve.FanGroupId, StringComparison.Ordinal)))
@@ -84,7 +91,8 @@ public sealed record MeasuredRpmPlot(
         IReadOnlyList<FanSpeedCurve> curves,
         DiminishingReturnsReport? report,
         string? groupId,
-        InfluenceTarget target)
+        InfluenceTarget target,
+        HeatId heat = HeatId.Low)
     {
         ArgumentNullException.ThrowIfNull(curves);
 
@@ -93,12 +101,12 @@ public sealed record MeasuredRpmPlot(
             return Empty(target, NeedFanTestsReason);
         }
 
-        FanSpeedCurve? curve = FindCurve(curves, groupId, target);
+        FanSpeedCurve? curve = FindCurve(curves, groupId, target, heat);
         if (curve is null)
         {
             return Empty(
                 target,
-                FanChoices(curves).Count == 0
+                FanChoices(curves, heat).Count == 0
                     ? NeedFanTestsReason
                     : $"No measured {InteractionBuilder.TargetName(target)} points for this fan.");
         }
@@ -182,12 +190,13 @@ public sealed record MeasuredRpmPlot(
     private static FanSpeedCurve? FindCurve(
         IReadOnlyList<FanSpeedCurve> curves,
         string? groupId,
-        InfluenceTarget target)
+        InfluenceTarget target,
+        HeatId heat)
     {
         FanSpeedCurve? fallback = null;
         foreach (FanSpeedCurve curve in curves)
         {
-            if (curve.Target != target || curve.Points.Count == 0)
+            if (curve.Heat != heat || curve.Target != target || curve.Points.Count == 0)
             {
                 continue;
             }

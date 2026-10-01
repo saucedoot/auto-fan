@@ -1,0 +1,17 @@
+---
+description: "When the user wants a second engineer, call systems-counsel and answer their opinion."
+alwaysApply: true
+---
+
+# Second engineer
+
+The user can call in `systems-counsel` (`.cursor/agents/systems-counsel.md`). That agent is a colleague, not a style pass.
+
+When the user asks for a second opinion, to check them, whether the system works as a whole, or to have the other engineer weigh in on a plan, method, or code:
+
+1. Stop editing.
+2. Launch the `systems-counsel` subagent. Pass the user's question, your current plan, and the files or behavior under debate. Tell it to read App.md and the Current snapshot in IMPLEMENTATION.md. If this chat cannot start that subagent, say so. Do not imitate their verdict yourself. Ask the user to start a new chat and ask again.
+3. When it returns, show the user its verdict in plain language, then your reply: agree, disagree (with the reason), or a revised plan.
+4. On **Stop** or **Narrow**, wait. Do not implement that work unless the user tells you to proceed.
+
+Do not call it for a one-line fix, a typo, or a test run they already asked for.

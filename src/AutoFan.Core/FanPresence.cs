@@ -30,8 +30,11 @@ public sealed record FanPresenceReport(
     IReadOnlyList<string> ConnectedIds,
     IReadOnlyList<string> EmptyIds,
     IReadOnlyList<SkippedFanGroup> Skipped,
-    string? Detail)
+    string? Detail,
+    IReadOnlyList<FanActuation>? Actuation = null)
 {
+    public IReadOnlyList<FanActuation> ActuationProfiles => Actuation ?? [];
+
     public FanPresence ToState() =>
         Status == FanPresenceStatus.Completed
             ? new FanPresence(true, ConnectedIds, EmptyIds)

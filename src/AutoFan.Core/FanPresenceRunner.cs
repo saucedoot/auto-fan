@@ -47,6 +47,8 @@ public sealed class FanPresenceRunner
         var empty = new List<string>();
         var skipped = new List<SkippedFanGroup>();
         var candidates = new List<FanGroup>();
+        var actuation = new List<FanActuation>();
+        var calibrator = new ActuationCalibrator(_hardware, _clock, _delay, samplePeriod: _samplePeriod);
 
         try
         {
@@ -98,7 +100,8 @@ public sealed class FanPresenceRunner
                         connected,
                         empty,
                         skipped,
-                        session.AbortDetail ?? write.Error ?? "Stopped by a safety limit.");
+                        session.AbortDetail ?? write.Error ?? "Stopped by a safety limit.",
+                        actuation);
                 }
 
                 if (!write.Accepted)
@@ -126,7 +129,8 @@ public sealed class FanPresenceRunner
                             connected,
                             empty,
                             skipped,
-                            session.AbortDetail ?? "Stopped by a safety limit.");
+                            session.AbortDetail ?? "Stopped by a safety limit.",
+                            actuation);
                     }
 
                     if (members.Any(member => HasFan(FindGroup(member.Id)?.Rpm)))
@@ -153,10 +157,28 @@ public sealed class FanPresenceRunner
                         empty.Add(member.Id);
                     }
                 }
+
+                if (members.Any(member => HasFan(FindGroup(member.Id)?.Rpm)))
+                {
+                    FanActuation measured = await calibrator.MeasureAsync(session, group, cancellationToken)
+                        .ConfigureAwait(false);
+                    actuation.Add(measured);
+                    _hardware.RestoreDefaults();
+                    if (session.IsAborted)
+                    {
+                        return Finish(
+                            FanPresenceStatus.Aborted,
+                            connected,
+                            empty,
+                            skipped,
+                            session.AbortDetail ?? "Stopped by a safety limit.",
+                            actuation);
+                    }
+                }
             }
 
-            progress?.Report(new FanPresenceProgress(DescribeSuccess(connected.Count, empty.Count)));
-            return Finish(FanPresenceStatus.Completed, connected, empty, skipped, detail: null);
+            progress?.Report(new FanPresenceProgress(DescribeSuccess(connected.Count, empty.Count, actuation.Count)));
+            return Finish(FanPresenceStatus.Completed, connected, empty, skipped, detail: null, actuation);
         }
         catch (OperationCanceledException)
         {
@@ -166,7 +188,8 @@ public sealed class FanPresenceRunner
                 connected,
                 empty,
                 skipped,
-                "Cancelled. Fans are back on BIOS and the NVIDIA driver.");
+                "Cancelled. Fans are back on BIOS and the NVIDIA driver.",
+                actuation);
         }
         catch
         {
@@ -189,32 +212,39 @@ public sealed class FanPresenceRunner
         List<string> connected,
         List<string> empty,
         List<SkippedFanGroup> skipped,
-        string? detail)
+        string? detail,
+        List<FanActuation> actuation)
     {
         return new FanPresenceReport(
             status,
             connected.ToArray(),
             empty.ToArray(),
             skipped.ToArray(),
-            detail);
+            detail,
+            actuation.ToArray());
     }
 
-    public static string DescribeSuccess(int connectedCount, int emptyCount)
+    public static string DescribeSuccess(int connectedCount, int emptyCount, int actuationCount = 0)
     {
         string connected = connectedCount == 1
             ? "1 connected fan header"
             : $"{connectedCount} connected fan headers";
+        string learned = actuationCount == 0
+            ? string.Empty
+            : actuationCount == 1
+                ? " Learned the speed range of 1 fan."
+                : $" Learned the speed range of {actuationCount} fans.";
         if (emptyCount == 0)
         {
-            return $"Found {connected}. AMD and Intel GPU fans were not changed.";
+            return $"Found {connected}.{learned} AMD and Intel GPU fans were not changed.";
         }
 
         string empty = emptyCount == 1
             ? "1 empty header"
             : $"{emptyCount} empty headers";
-        return $"Found {connected}. Hidden {empty}. AMD and Intel GPU fans were not changed.";
+        return $"Found {connected}. Hidden {empty}.{learned} AMD and Intel GPU fans were not changed.";
     }
 
     public static string NeededDetail { get; } =
-        "Sets each motherboard header, and NVIDIA GPU fans once per card, to 100%. A header is connected if it has RPM. No heat is added. AMD and Intel GPU fans are not changed.";
+        "Sets each motherboard header, and NVIDIA GPU fans once per card, to 100%, then steps the speed down to learn how that fan spins. A header is connected if it has RPM. No heat is added. Fans return to BIOS and the NVIDIA driver when the check finishes. AMD and Intel GPU fans are not changed.";
 }

@@ -8,4 +8,5 @@ public enum BaselinePhase
     High,
     Reference,
     Cooldown,
+    Gpu,
 }

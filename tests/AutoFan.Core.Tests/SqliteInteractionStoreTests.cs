@@ -64,7 +64,10 @@ public sealed class SqliteInteractionStoreTests
                 "Top exhaust",
                 InteractionStep.ReferenceFirst,
                 snapshot,
-                Settled: true),
+                Settled: true,
+                Assessment: HoldAssessment.SettledMeasured,
+                CommandedDutyPercent: 55,
+                HoldId: 2),
         ];
         InteractionEntry[] effects =
         [
@@ -118,5 +121,8 @@ public sealed class SqliteInteractionStoreTests
         Assert.Equal(expected.Skipped[0].Reason, actual.Skipped[0].Reason);
         Assert.Equal(expected.Samples[0].Step, actual.Samples[0].Step);
         Assert.Equal(expected.Samples[0].Settled, actual.Samples[0].Settled);
+        Assert.Equal(expected.Samples[0].Assessment, actual.Samples[0].Assessment);
+        Assert.Equal(expected.Samples[0].CommandedDutyPercent, actual.Samples[0].CommandedDutyPercent);
+        Assert.Equal(expected.Samples[0].HoldId, actual.Samples[0].HoldId);
     }
 }

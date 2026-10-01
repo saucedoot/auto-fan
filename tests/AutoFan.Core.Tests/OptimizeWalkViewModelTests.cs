@@ -103,12 +103,10 @@ public sealed class OptimizeWalkViewModelTests
         walk.RequestPrimary();
         walk.BeginCurrent();
         walk.CompleteCurrent("Fan tests finished.");
-        walk.RequestPrimary();
-        walk.BeginCurrent();
-        walk.CompleteCurrent("Holding.");
 
-        Assert.False(walk.CanCancel);
+        Assert.Equal("Finish", walk.PrimaryText);
+        Assert.True(walk.CanCancel);
         walk.RequestCancel();
-        Assert.Equal(1, cancel);
+        Assert.Equal(2, cancel);
     }
 }

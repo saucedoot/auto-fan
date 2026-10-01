@@ -184,7 +184,7 @@ public sealed class FakeHardwareBackend : IHardwareBackend
             return new DutySetResult(false, SafetyLimits.Describe(abort.Value));
         }
 
-        _fans[fanGroupId] = fan with { Duty = duty.Value };
+        _fans[fanGroupId] = AtDuty(fan, duty.Value);
         ApplyCoupledNvidiaDuty(fanGroupId, duty.Value);
         HasActiveSoftwareControl = true;
         return new DutySetResult(true, Error: null);
@@ -195,7 +195,7 @@ public sealed class FakeHardwareBackend : IHardwareBackend
         foreach (string id in _fans.Keys.ToArray())
         {
             FanState fan = _fans[id];
-            _fans[id] = fan with { Duty = _originalDuties[id] };
+            _fans[id] = AtDuty(fan, _originalDuties[id]);
         }
 
         HasActiveSoftwareControl = false;
@@ -219,7 +219,7 @@ public sealed class FakeHardwareBackend : IHardwareBackend
                 continue;
             }
 
-            _fans[sibling.Id] = _fans[sibling.Id] with { Duty = percent };
+            _fans[sibling.Id] = AtDuty(_fans[sibling.Id], percent);
         }
     }
 
@@ -254,7 +254,35 @@ public sealed class FakeHardwareBackend : IHardwareBackend
             return 0;
         }
 
+        if (!fan.IsSpinning && fan.StartDuty is int start && fan.Duty < start)
+        {
+            return 0;
+        }
+
         return fan.MaxRpm * fan.Duty / 100.0;
+    }
+
+    private static FanState AtDuty(FanState fan, int duty)
+    {
+        FanState next = fan with { Duty = duty };
+        return next with { IsSpinning = ComputeRpm(next) > 0 };
+    }
+
+    public void SetSpinThresholds(string fanGroupId, int keepAliveDuty, int startDuty)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(fanGroupId);
+        if (!_fans.TryGetValue(fanGroupId, out FanState? fan) || fan is null)
+        {
+            throw new ArgumentException($"Unknown fan group '{fanGroupId}'.", nameof(fanGroupId));
+        }
+
+        FanState armed = fan with
+        {
+            StallAtOrBelowDuty = keepAliveDuty,
+            StartDuty = startDuty,
+            IsSpinning = true,
+        };
+        _fans[fanGroupId] = AtDuty(armed, fan.Duty);
     }
 
     private sealed record FanState(
@@ -265,7 +293,9 @@ public sealed class FakeHardwareBackend : IHardwareBackend
         bool IsGpu = false,
         bool RespondsToDuty = true,
         string? ControllerName = null,
-        int? StallAtOrBelowDuty = null);
+        int? StallAtOrBelowDuty = null,
+        int? StartDuty = null,
+        bool IsSpinning = true);
 
     public void AddFan(
         string id,

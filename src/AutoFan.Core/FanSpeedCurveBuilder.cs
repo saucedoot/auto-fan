@@ -18,20 +18,27 @@ public static class FanSpeedCurveBuilder
                 .Where(sample => sample.FanGroupId == groupId)
                 .ToArray();
             string groupName = groupSamples[0].FanGroupName;
-            foreach (InfluenceTarget target in Enum.GetValues<InfluenceTarget>())
+            foreach (HeatId heat in DistinctHeats(groupSamples))
             {
-                IReadOnlyList<FanSpeedPoint> points = Points(groupSamples, groupId, target);
-                if (points.Count == 0)
+                IReadOnlyList<FanTestSample> heatSamples = groupSamples
+                    .Where(sample => sample.HeatId == heat)
+                    .ToArray();
+                foreach (InfluenceTarget target in Enum.GetValues<InfluenceTarget>())
                 {
-                    continue;
-                }
+                    IReadOnlyList<FanSpeedPoint> points = Points(heatSamples, groupId, target);
+                    if (points.Count == 0)
+                    {
+                        continue;
+                    }
 
-                curves.Add(new FanSpeedCurve(
-                    groupId,
-                    groupName,
-                    target,
-                    points,
-                    MetricEvidence.Measured));
+                    curves.Add(new FanSpeedCurve(
+                        groupId,
+                        groupName,
+                        target,
+                        points,
+                        MetricEvidence.Measured,
+                        heat));
+                }
             }
         }
 
@@ -166,6 +173,20 @@ public static class FanSpeedCurveBuilder
         }
 
         return null;
+    }
+
+    private static IReadOnlyList<HeatId> DistinctHeats(IReadOnlyList<FanTestSample> samples)
+    {
+        var heats = new List<HeatId>();
+        foreach (FanTestSample sample in samples)
+        {
+            if (!heats.Contains(sample.HeatId))
+            {
+                heats.Add(sample.HeatId);
+            }
+        }
+
+        return heats;
     }
 
     private static IReadOnlyList<string> DistinctGroupIds(IReadOnlyList<FanTestSample> samples)

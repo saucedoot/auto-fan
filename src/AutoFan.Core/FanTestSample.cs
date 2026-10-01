@@ -7,4 +7,7 @@ public sealed record FanTestSample(
     FanTestStage Stage,
     HardwareSnapshot Snapshot,
     bool Settled = false,
-    HeatId HeatId = HeatId.Low);
+    HeatId HeatId = HeatId.Low,
+    HoldAssessment Assessment = HoldAssessment.TransientModeled,
+    int? CommandedDutyPercent = null,
+    int HoldId = 0);

@@ -12,7 +12,22 @@ public static class NvidiaFanWriter
 {
     public const string Unavailable = "This NVIDIA driver cannot control GPU fans.";
 
-    public static DutySetResult TrySetDuty(string? preferredGpuName, int percent)
+    public static string? TryResolveId(string? preferredGpuName)
+    {
+        try
+        {
+            NVIDIA.Initialize();
+            NvidiaGpuChoice[] choices = Choices();
+            uint? id = NvidiaGpuSelector.Select(choices, hardwareId: null, preferredGpuName);
+            return id?.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    public static DutySetResult TrySetDuty(string? preferredGpuName, int percent, string? gpuHardwareId = null)
     {
         if (!DutyPercent.TryCreate(percent, out DutyPercent duty))
         {
@@ -24,7 +39,7 @@ public static class NvidiaFanWriter
         try
         {
             NVIDIA.Initialize();
-            PhysicalGPU? gpu = Match(preferredGpuName);
+            PhysicalGPU? gpu = Match(preferredGpuName, gpuHardwareId);
             if (gpu is null)
             {
                 return new DutySetResult(false, Unavailable);
@@ -74,25 +89,20 @@ public static class NvidiaFanWriter
         }
     }
 
-    private static PhysicalGPU? Match(string? preferredGpuName)
+    private static PhysicalGPU? Match(string? preferredGpuName, string? gpuHardwareId)
     {
         PhysicalGPU[] gpus = PhysicalGPU.GetPhysicalGPUs();
-        if (gpus.Length == 0)
+        uint? selected = NvidiaGpuSelector.Select(Choices(gpus), gpuHardwareId, preferredGpuName);
+        if (selected is not uint id)
         {
             return null;
         }
 
-        if (!string.IsNullOrWhiteSpace(preferredGpuName))
-        {
-            PhysicalGPU? named = gpus.FirstOrDefault(gpu =>
-                gpu.FullName.Contains(preferredGpuName, StringComparison.OrdinalIgnoreCase)
-                || preferredGpuName.Contains(gpu.FullName, StringComparison.OrdinalIgnoreCase));
-            if (named is not null)
-            {
-                return named;
-            }
-        }
-
-        return gpus[0];
+        return gpus.FirstOrDefault(gpu => gpu.GPUId == id);
     }
+
+    private static NvidiaGpuChoice[] Choices() => Choices(PhysicalGPU.GetPhysicalGPUs());
+
+    private static NvidiaGpuChoice[] Choices(PhysicalGPU[] gpus) =>
+        gpus.Select(gpu => new NvidiaGpuChoice(gpu.GPUId, gpu.FullName)).ToArray();
 }

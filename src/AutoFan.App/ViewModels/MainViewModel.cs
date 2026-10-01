@@ -10,6 +10,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private IReadOnlyList<FanSpeedCurve> _speedCurves = [];
     private string? _selectedRpmPlotFanId;
     private InfluenceTarget _selectedRpmPlotTarget = InfluenceTarget.Cpu;
+    private HeatId _selectedRpmPlotHeat = HeatId.Low;
     private PolicyConfirmation? _confirmation;
     private DriftAssessment? _drift;
     private double _quietCool;
@@ -20,6 +21,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private string? _preferredGpuId;
     private bool _hideDisconnectedFans;
     private FanPresence _presence;
+    private IReadOnlyList<FanActuation> _actuation = [];
     private string _presenceDetail = FanPresenceRunner.NeededDetail;
     private readonly IReadOnlyList<CheckRow> _baseChecks;
     private HardwareSnapshot? _lastSnapshot;
@@ -67,12 +69,12 @@ public sealed class MainViewModel : INotifyPropertyChanged
         OptimizeProgressText = "Ready. Optimize will observe, test fans, then apply a setting.";
         CanEditPriorities = true;
         HomeTagline =
-            "Test this PC, then hold a quieter or cooler fan policy while this window is open.";
+            "Test this PC. When you finish or stop, fans go back to BIOS and the NVIDIA driver. Curves are not applied yet.";
         SetupHeadline = "This PC isn't ready to test yet.";
         BiosCaption = "Stop, close, or a temperature limit puts fans back on BIOS and the NVIDIA driver.";
-        HoldingHeadline = "Holding a policy for this PC";
+        HoldingHeadline = "Legacy two-speed hold";
         HoldingCaption =
-            "Motherboard and NVIDIA fans follow AUTO Fan while this window is open. Close the window to return to BIOS and the driver.";
+            "This is the old quieter-versus-louder setting, not a temperature curve. Close the window to return to BIOS and the NVIDIA driver.";
         _baseChecks = environment.Checks
             .Select(static check => new CheckRow(
                 check.Title,
@@ -199,6 +201,77 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public string GpuName { get; private set; }
 
     public IReadOnlyList<GpuChoice> Gpus { get; private set; } = [];
+
+    public IReadOnlyList<FanActuation> Actuation => _actuation;
+
+    public JointSearchResult? LastJointSearch { get; private set; }
+
+    public bool CurveMayRun { get; private set; }
+
+    private CoolingProfile? _savedCurve;
+    public HomeCurvePage CurvePage { get; private set; } = HomeCurveBoard.Build(null);
+
+    public bool HasCurveDraft => _savedCurve is not null;
+
+    public Action<CoolingProfile>? SaveCurve { get; set; }
+
+    public void NoteSavedCurve(CoolingProfile profile, bool mayRun)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        _savedCurve = profile;
+        CurveMayRun = mayRun && CurveActuator.MayTakeControl(profile);
+        RefreshCurvePage();
+    }
+
+    public string? TryEditCurve(string groupId, CurveSensor sensor, double temperatureCelsius, int dutyPercent)
+    {
+        if (_savedCurve is null)
+        {
+            CurveEditError = "There is no curve to edit.";
+            OnPropertyChanged(nameof(CurveEditError));
+            return CurveEditError;
+        }
+
+        if (!CurveEdit.TryApply(
+                _savedCurve,
+                groupId,
+                sensor,
+                temperatureCelsius,
+                dutyPercent,
+                out CoolingProfile updated,
+                out string? error))
+        {
+            CurveEditError = error ?? "That edit was not saved.";
+            OnPropertyChanged(nameof(CurveEditError));
+            return CurveEditError;
+        }
+
+        _savedCurve = updated;
+        CurveMayRun = false;
+        CurveEditError = string.Empty;
+        SaveCurve?.Invoke(updated);
+        RefreshCurvePage();
+        OnPropertyChanged(nameof(CurveEditError));
+        return null;
+    }
+
+    public string CurveEditError { get; private set; } = string.Empty;
+
+    private void RefreshCurvePage()
+    {
+        CurvePage = HomeCurveBoard.Build(
+            _savedCurve,
+            _actuation.Select(static fan => fan.FanGroupId).ToArray());
+        OnPropertyChanged(nameof(CurvePage));
+        OnPropertyChanged(nameof(HasCurveDraft));
+        OnPropertyChanged(nameof(CurveMayRun));
+    }
+
+    public void RememberJoint(JointSearchResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        LastJointSearch = result;
+    }
 
     public bool CanChooseGpu =>
         Gpus.Count > 1
@@ -434,9 +507,11 @@ public sealed class MainViewModel : INotifyPropertyChanged
         if (report.Status == FanPresenceStatus.Completed)
         {
             _presence = report.ToState();
+            _actuation = report.ActuationProfiles;
             _presenceDetail = FanPresenceRunner.DescribeSuccess(
                 report.ConnectedIds.Count,
-                report.EmptyIds.Count);
+                report.EmptyIds.Count,
+                report.ActuationProfiles.Count);
             _hideDisconnectedFans = true;
             if (_lastSnapshot is HardwareSnapshot snapshot)
             {
@@ -615,7 +690,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
             }
 
             _selectedRpmPlotFanId = value.FanGroupId;
-            RebuildRpmPlot();
+            RebuildRpmPlot(report: null);
             NotifyDiminishingReturns();
         }
     }
@@ -631,7 +706,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
             }
 
             _selectedRpmPlotTarget = value.Target;
-            RebuildRpmPlot();
+            RebuildRpmPlot(report: null);
             NotifyDiminishingReturns();
         }
     }
@@ -647,7 +722,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
             }
 
             _selectedRpmPlotTarget = InfluenceTarget.Cpu;
-            RebuildRpmPlot();
+            RebuildRpmPlot(report: null);
             NotifyDiminishingReturns();
         }
     }
@@ -663,7 +738,25 @@ public sealed class MainViewModel : INotifyPropertyChanged
             }
 
             _selectedRpmPlotTarget = InfluenceTarget.Gpu;
-            RebuildRpmPlot();
+            RebuildRpmPlot(report: null);
+            NotifyDiminishingReturns();
+        }
+    }
+
+    public IReadOnlyList<MeasuredRpmHeatChoice> RpmPlotHeatChoices { get; private set; } = [];
+
+    public MeasuredRpmHeatChoice? SelectedRpmPlotHeat
+    {
+        get => RpmPlotHeatChoices.FirstOrDefault(choice => choice.Heat == _selectedRpmPlotHeat);
+        set
+        {
+            if (value is null || value.Heat == _selectedRpmPlotHeat)
+            {
+                return;
+            }
+
+            _selectedRpmPlotHeat = value.Heat;
+            RebuildRpmPlot(report: null);
             NotifyDiminishingReturns();
         }
     }
@@ -890,20 +983,14 @@ public sealed class MainViewModel : INotifyPropertyChanged
         IReadOnlyList<FanSpeedCurve>? curves = null)
     {
         ArgumentNullException.ThrowIfNull(report);
-        _returns = report;
         _speedCurves = curves ?? [];
-        RpmPlotFans = MeasuredRpmPlot.FanChoices(_speedCurves);
-        if (_selectedRpmPlotFanId is null
-            || RpmPlotFans.All(fan => !string.Equals(fan.FanGroupId, _selectedRpmPlotFanId, StringComparison.Ordinal)))
+        RpmPlotHeatChoices = MeasuredRpmHeatChoice.From(_speedCurves);
+        if (RpmPlotHeatChoices.All(choice => choice.Heat != _selectedRpmPlotHeat))
         {
-            _selectedRpmPlotFanId = RpmPlotFans.FirstOrDefault()?.FanGroupId;
+            _selectedRpmPlotHeat = RpmPlotHeatChoices.FirstOrDefault()?.Heat ?? HeatId.Low;
         }
 
-        RebuildRpmPlot();
-        DiminishingReturnsProgressText = report.HasRecommendation
-            ? "Built from the measured speed curve. Does not change fans."
-            : "Need a measured speed-versus-temperature curve (several fan speeds, not just one test step).";
-        DiminishingReturnsResults = BuildDiminishingReturnsResults(report);
+        RebuildRpmPlot(report);
         NotifyDiminishingReturns();
         RefreshOptimizeAvailability();
     }
@@ -1094,15 +1181,35 @@ public sealed class MainViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(IsGpuRpmPlotTarget));
         OnPropertyChanged(nameof(RpmPlot));
         OnPropertyChanged(nameof(HasRpmPlot));
+        OnPropertyChanged(nameof(RpmPlotHeatChoices));
+        OnPropertyChanged(nameof(SelectedRpmPlotHeat));
     }
 
-    private void RebuildRpmPlot()
+    private void RebuildRpmPlot(DiminishingReturnsReport? report)
     {
+        IReadOnlyList<FanSpeedCurve> heatCurves = _speedCurves
+            .Where(curve => curve.Heat == _selectedRpmPlotHeat)
+            .ToArray();
+        _returns = heatCurves.Count == 0 && report is not null
+            ? report
+            : DiminishingReturnsAnalyzer.Analyze(heatCurves);
+        RpmPlotFans = MeasuredRpmPlot.FanChoices(_speedCurves, _selectedRpmPlotHeat);
+        if (_selectedRpmPlotFanId is null
+            || RpmPlotFans.All(fan => !string.Equals(fan.FanGroupId, _selectedRpmPlotFanId, StringComparison.Ordinal)))
+        {
+            _selectedRpmPlotFanId = RpmPlotFans.FirstOrDefault()?.FanGroupId;
+        }
+
         RpmPlot = MeasuredRpmPlot.For(
-            _speedCurves,
+            heatCurves,
             _returns,
             _selectedRpmPlotFanId,
-            _selectedRpmPlotTarget);
+            _selectedRpmPlotTarget,
+            _selectedRpmPlotHeat);
+        DiminishingReturnsProgressText = _returns.HasRecommendation
+            ? $"Built from the {MeasuredRpmHeatChoice.LabelFor(_selectedRpmPlotHeat)} heat only. Does not change fans."
+            : "Need a measured speed-versus-temperature curve (several fan speeds, not just one test step).";
+        DiminishingReturnsResults = BuildDiminishingReturnsResults(_returns);
     }
 
     private void NotifyExplanation()

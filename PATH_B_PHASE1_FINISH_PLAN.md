@@ -1,5 +1,7 @@
 # Path B — Finish Phase 1 (remaining slices)
 
+> **Historical as of 2026-09-21.** Safety, restore, raw samples, stored heat, below-BIOS writes, and Unknown rules in this file remain useful. The fixed ladder, the mandatory dense grid, the two-end Hold ending, the one-point-per-heat curve rule, and a BIOS proof of that policy are superseded by [PRODUCT_DIRECTION.md](PRODUCT_DIRECTION.md). The next code slice is legacy-hold containment in [IMPLEMENTATION.md](IMPLEMENTATION.md), not F3 from this plan.
+
 **Date:** 2026-09-21  
 **For:** Pike review (Ship / Ship after fixes / Do not ship)  
 **Status:** Plan only. **Do not implement product C#/XAML in this PR.** No build agent starts until Pike **Ships** this plan.  

@@ -20,6 +20,8 @@ public sealed class FanTestRunner
     private readonly BaselineRun? _baseline;
     private readonly IBaselineStore? _baselineStore;
     private readonly bool _runHot;
+    private int _nextHoldId;
+    private PumpWatch? _pumps;
 
     public FanTestRunner(
         IHardwareBackend hardware,
@@ -462,7 +464,8 @@ public sealed class FanTestRunner
             samples,
             session,
             progress,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken,
+            commandedDuty: duty).ConfigureAwait(false);
         MarkDuty(testedDuties, group.Id, duty);
         return sampled;
     }
@@ -488,10 +491,12 @@ public sealed class FanTestRunner
         List<FanTestSample> samples,
         SafeFanSession? session,
         IProgress<FanTestProgress>? progress,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int? commandedDuty = null)
     {
         var snapshots = new List<HardwareSnapshot>();
         int holdStart = samples.Count;
+        int holdId = _nextHoldId++;
         DateTimeOffset deadline = _clock.GetUtcNow() + _schedule.Timeout;
         while (true)
         {
@@ -507,15 +512,36 @@ public sealed class FanTestRunner
                 return session.AbortDetail ?? "Fan test aborted by safety limits.";
             }
 
-            HardwareSnapshot snapshot = _hardware.ReadSnapshot();
             DateTimeOffset now = _clock.GetUtcNow();
+            HardwareSnapshot snapshot = _hardware.ReadSnapshot() with { CapturedAt = now };
             _trend.Add(now, snapshot);
+            _pumps ??= PumpWatch.Capture(snapshot);
+            if (heatId != HeatId.Idle && _pumps.Check(snapshot) is string pumpSilent)
+            {
+                return pumpSilent;
+            }
+
+            ThermalAbortReason? ceiling = SafetyLimits.EvaluateWhileHeating(snapshot, _workload, _limits);
+            if (ceiling is not null)
+            {
+                return SafetyLimits.Describe(ceiling.Value, _limits);
+            }
+
             if (_trend.Evaluate(_limits) is ThermalAbortReason rise)
             {
                 return SafetyLimits.Describe(rise);
             }
 
-            samples.Add(new FanTestSample(now, group.Id, group.Name, stage, snapshot, Settled: false, HeatId: heatId));
+            samples.Add(new FanTestSample(
+                now,
+                group.Id,
+                group.Name,
+                stage,
+                snapshot,
+                Settled: false,
+                HeatId: heatId,
+                CommandedDutyPercent: commandedDuty,
+                HoldId: holdId));
             snapshots.Add(snapshot);
             progress?.Report(new FanTestProgress(
                 group.Id,
@@ -533,14 +559,21 @@ public sealed class FanTestRunner
                 return SafetyLimits.Describe(abort.Value, _limits);
             }
 
-            if (TemperatureSettle.RelevantTempsSettled(snapshots))
+            bool timedOut = now >= deadline;
+            HoldAssessment assessment = HoldAssessor.Evaluate(
+                snapshots,
+                timedOut,
+                group.Id,
+                dutyCommanded: commandedDuty is not null);
+            if (assessment == HoldAssessment.SettledMeasured)
             {
-                MarkSettled(samples, holdStart);
+                StampHold(samples, holdStart, assessment, settled: true);
                 return null;
             }
 
-            if (now >= deadline)
+            if (timedOut)
             {
+                StampHold(samples, holdStart, assessment, settled: false);
                 return null;
             }
 
@@ -982,7 +1015,7 @@ public sealed class FanTestRunner
             .Where(sample => sample.Phase == BaselinePhase.Idle)
             .Select(sample => sample.Snapshot)
             .ToArray();
-        return TemperatureSettle.RelevantTempsSettled(idle);
+        return HoldAssessor.Evaluate(idle, timedOut: false) == HoldAssessment.SettledMeasured;
     }
 
     private static IReadOnlyList<FanTestSample> ForHeat(IReadOnlyList<FanTestSample> samples, HeatId heatId) =>
@@ -1106,11 +1139,19 @@ public sealed class FanTestRunner
     private FanGroup? FindGroup(string id) =>
         _hardware.FanGroups.FirstOrDefault(fan => fan.Id == id);
 
-    private static void MarkSettled(List<FanTestSample> samples, int fromIndex)
+    private static void StampHold(
+        List<FanTestSample> samples,
+        int fromIndex,
+        HoldAssessment assessment,
+        bool settled)
     {
         for (int index = fromIndex; index < samples.Count; index++)
         {
-            samples[index] = samples[index] with { Settled = true };
+            samples[index] = samples[index] with
+            {
+                Settled = settled,
+                Assessment = assessment,
+            };
         }
     }
 

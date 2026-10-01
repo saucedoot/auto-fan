@@ -1,5 +1,7 @@
 # Audit: Path B mental model vs code and experiment
 
+> **Historical as of 2026-09-21.** This audit records v1.15-era code against an older Path B reading. Safety, restore, raw samples, and the honesty gaps it names remain useful. It is not the controlling direction. The fixed ladder, dense-grid ending, two-end Hold, one-point-per-heat curves, and a policy BIOS proof are superseded by [PRODUCT_DIRECTION.md](PRODUCT_DIRECTION.md).
+
 **Date:** 2026-09-21  
 **Repo:** https://github.com/saucedoot/auto-fan  
 **Code under review:** v1.15 behavior on `cursor/path-b-docs-a4e1` (same C# as master `da6b35f`; Path B exists in docs only)  

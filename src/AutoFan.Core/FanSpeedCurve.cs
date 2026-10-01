@@ -5,4 +5,5 @@ public sealed record FanSpeedCurve(
     string FanGroupName,
     InfluenceTarget Target,
     IReadOnlyList<FanSpeedPoint> Points,
-    MetricEvidence Evidence);
+    MetricEvidence Evidence,
+    HeatId Heat = HeatId.Low);

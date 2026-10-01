@@ -9,10 +9,10 @@ public static class OptimizeWalkOutcome
         "No fan measurements yet. Retry when you are ready.";
 
     public const string SkipPairsDetail =
-        "Fan tests stopped before pair tests. Pair tests were skipped. Continue to hold a quieter setting from what was measured.";
+        "Fan tests stopped before pair tests. Pair tests were skipped. Finish to put the fans back. Nothing is applied.";
 
     public const string PairsFinishedDetail =
-        "Fan tests finished. Continue when you are ready.";
+        "Fan tests finished. Finish to put the fans back. Nothing is applied.";
 
     public const string WatchGpuCoolNote =
         " GPU Core did not heat enough, so GPU cooling stays Unknown.";
@@ -38,6 +38,9 @@ public static class OptimizeWalkOutcome
         return false;
     }
 
+    public static bool HasModeledRank(IReadOnlyList<InfluenceEntry>? influence) =>
+        influence?.Any(entry => entry.Evidence == MetricEvidence.Modeled) == true;
+
     public static WalkFansNext AfterFans(FanTestRun run)
     {
         ArgumentNullException.ThrowIfNull(run);
@@ -49,7 +52,12 @@ public static class OptimizeWalkOutcome
         bool useful = HasUsefulInfluence(run.Influence);
         if (run.Status == FanTestRunStatus.Completed)
         {
-            return useful ? WalkFansNext.RunPairs : WalkFansNext.Retry;
+            if (useful)
+            {
+                return WalkFansNext.RunPairs;
+            }
+
+            return HasModeledRank(run.Influence) ? WalkFansNext.SkipPairs : WalkFansNext.Retry;
         }
 
         return useful ? WalkFansNext.SkipPairs : WalkFansNext.Retry;

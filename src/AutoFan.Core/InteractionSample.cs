@@ -8,4 +8,7 @@ public sealed record InteractionSample(
     string SecondGroupName,
     InteractionStep Step,
     HardwareSnapshot Snapshot,
-    bool Settled = false);
+    bool Settled = false,
+    HoldAssessment Assessment = HoldAssessment.TransientModeled,
+    int? CommandedDutyPercent = null,
+    int HoldId = 0);

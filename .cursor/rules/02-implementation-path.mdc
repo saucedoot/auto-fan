@@ -6,7 +6,7 @@ alwaysApply: true
 
 # Implementation path
 
-- Before a non-trivial task, read [AGENTS.md](AGENTS.md), the **Current snapshot** in [IMPLEMENTATION.md](IMPLEMENTATION.md), and the matching section of [App.md](App.md).
+- Before a non-trivial task, read [AGENTS.md](AGENTS.md), [PRODUCT_DIRECTION.md](PRODUCT_DIRECTION.md), the **Current snapshot** in [IMPLEMENTATION.md](IMPLEMENTATION.md), and the matching section of [App.md](App.md). The snapshot's next slice wins over the rest of the direction.
 - Implement **only** the agreed versioned slice (v1.1+). Flag later ideas; do not build them. Do not invent P14/P15.
 - Fan writes stay behind restore-on-exit, crash recovery, and abort limits (P3). Never skip that safety floor.
 - Case geometry and manufacturer specs are priors, not ground truth. Never loosen safety ceilings.

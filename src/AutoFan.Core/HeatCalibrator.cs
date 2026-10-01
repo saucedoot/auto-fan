@@ -69,17 +69,19 @@ public static class HeatCalibrator
         TimeSpan samplePeriod,
         Func<TimeSpan, CancellationToken, Task> delay,
         IProgress<BaselineProgress>? progress,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        HeatProfile? startProfile = null)
     {
         ArgumentNullException.ThrowIfNull(hardware);
         ArgumentNullException.ThrowIfNull(workload);
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(delay);
 
+        HeatProfile profile = startProfile ?? HeatProfile.StartingLow;
         if (!workload.GpuLoadAvailable)
         {
-            workload.ApplyLow(HeatProfile.StartingLow);
-            return new HeatCalibrationResult(HeatProfile.StartingLow, AbortDetail: null);
+            workload.ApplyLow(profile);
+            return new HeatCalibrationResult(profile, AbortDetail: null);
         }
 
         if (idleGpuCelsius is not double idleGpu)
@@ -89,7 +91,6 @@ public static class HeatCalibrator
                 SafetyLimits.Describe(ThermalAbortReason.TelemetryLost, limits));
         }
 
-        HeatProfile profile = HeatProfile.StartingLow;
         workload.ApplyLow(profile);
         for (int step = 0; step <= MaxIncreases; step++)
         {

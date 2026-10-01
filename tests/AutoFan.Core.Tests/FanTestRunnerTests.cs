@@ -906,7 +906,7 @@ public sealed class FanTestRunnerTests
             new FixedCompetingSoftwareScanner(),
             store,
             clock,
-            new FanTestSchedule(TimeSpan.FromSeconds(8), TimeSpan.FromSeconds(1)),
+            new FanTestSchedule(TimeSpan.FromSeconds(40), TimeSpan.FromSeconds(1)),
             (span, token) =>
             {
                 token.ThrowIfCancellationRequested();
@@ -965,7 +965,7 @@ public sealed class FanTestRunnerTests
                 if (!stretchedLow && delays == 8)
                 {
                     stretchedLow = true;
-                    clock.Advance(TimeSpan.FromMinutes(29));
+                    clock.Advance(TimeSpan.FromMinutes(25));
                 }
 
                 clock.Advance(span);
@@ -1229,7 +1229,7 @@ public sealed class FanTestRunnerTests
                 if (!stretchedLow && delays == 8)
                 {
                     stretchedLow = true;
-                    clock.Advance(TimeSpan.FromMinutes(29));
+                    clock.Advance(TimeSpan.FromMinutes(25));
                 }
 
                 clock.Advance(span);

@@ -89,3 +89,6 @@ appsettings.*.local.json
 *.db-shm
 *.db-wal
 autofan.db
+
+# Local Freebuff tool data
+.freebuff/

@@ -148,6 +148,58 @@
           </StackPanel>
         </Grid>
 
+        <StackPanel Margin="0,20,0,0"
+                    Visibility="{Binding HasCurveDraft, Converter={StaticResource BoolVis}}">
+          <TextBlock FontSize="16" FontWeight="SemiBold" Text="{Binding CurvePage.StateLabel}" />
+          <TextBlock Margin="0,4,0,0"
+                     Foreground="{StaticResource Brush.Muted}"
+                     Text="{Binding CurvePage.ControlLabel}"
+                     TextWrapping="Wrap" />
+          <ItemsControl Margin="0,8,0,0" ItemsSource="{Binding CurvePage.Groups}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Margin="0,0,0,8"
+                        Padding="12"
+                        Background="{StaticResource Brush.Card}"
+                        CornerRadius="8">
+                  <StackPanel>
+                    <TextBlock FontWeight="SemiBold" Text="{Binding GroupId}" />
+                    <TextBlock Margin="0,4,0,0"
+                               Foreground="{StaticResource Brush.Muted}"
+                               Text="{Binding DriverLabel}"
+                               TextWrapping="Wrap" />
+                    <ItemsControl Margin="0,8,0,0" ItemsSource="{Binding Points}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                          <StackPanel Margin="0,4,0,0" Orientation="Horizontal">
+                            <TextBlock MinWidth="220"
+                                       VerticalAlignment="Center"
+                                       Text="{Binding Label}" />
+                            <TextBox Width="48"
+                                     Margin="8,0,0,0"
+                                     VerticalAlignment="Center"
+                                     Text="{Binding DutyPercent, Mode=OneWay}"
+                                     Visibility="{Binding CanEdit, Converter={StaticResource BoolVis}}" />
+                            <Button Margin="8,0,0,0"
+                                    Padding="8,2"
+                                    Content="Save duty"
+                                    Click="OnSaveCurvePoint"
+                                    Visibility="{Binding CanEdit, Converter={StaticResource BoolVis}}" />
+                          </StackPanel>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Margin="0,8,0,0"
+                               Foreground="{StaticResource Brush.Danger}"
+                               Text="{Binding DataContext.CurveEditError, RelativeSource={RelativeSource AncestorType=Window}}"
+                               TextWrapping="Wrap" />
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+
         <StackPanel Margin="0,16,0,0">
           <TextBlock FontSize="16"
                      FontWeight="SemiBold"
@@ -347,8 +399,14 @@
                        Foreground="{StaticResource Brush.Muted}"
                        Text="{Binding ExplanationProgressText}" />
           </StackPanel>
+          <ComboBox Margin="0,16,0,0"
+                    Width="160"
+                    HorizontalAlignment="Left"
+                    ItemsSource="{Binding RpmPlotHeatChoices}"
+                    SelectedItem="{Binding SelectedRpmPlotHeat}"
+                    DisplayMemberPath="Label" />
           <local:MeasuredRpmChart Height="480"
-                                  Margin="0,16,0,0"
+                                  Margin="0,8,0,0"
                                   Plot="{Binding RpmPlot}" />
           <ItemsControl Margin="0,16,0,0" ItemsSource="{Binding ExplanationResults}">
             <ItemsControl.ItemTemplate>
@@ -542,7 +600,14 @@
           </StackPanel>
 
           <StackPanel Margin="0,16,0,0">
-          <TextBlock FontWeight="SemiBold" Text="Diminishing returns" />
+          <TextBlock FontWeight="SemiBold" Text="Legacy two-speed hold" />
+          <TextBlock Margin="0,4,0,0"
+                     Text="Old experiment. It picks a quieter speed and a louder speed from the Low heat only. It is not a temperature curve." />
+          <Button Margin="0,8,0,0"
+                  HorizontalAlignment="Left"
+                  Content="Hold the old two-speed setting"
+                  Click="OnLegacyHold" />
+          <TextBlock Margin="0,16,0,0" FontWeight="SemiBold" Text="Diminishing returns" />
           <TextBlock Margin="0,4,0,0" Text="{Binding DiminishingReturnsProgressText}" />
           <ItemsControl Margin="0,4,0,0"
                         ItemsSource="{Binding DiminishingReturnsResults}"

@@ -9,6 +9,10 @@ public sealed class BaselineRunner
     private readonly BaselineSchedule _schedule;
     private readonly Func<TimeSpan, CancellationToken, Task> _delay;
     private readonly ThermalAbortLimits _limits;
+    private PumpWatch? _pumps;
+    private readonly List<HeatAnchor> _anchors = [];
+    private HoldAssessment _lastAssessment = HoldAssessment.TransientModeled;
+    private HardwareSnapshot? _lastReference;
 
     public BaselineRunner(
         IHardwareBackend hardware,
@@ -35,6 +39,8 @@ public sealed class BaselineRunner
         Guid id = Guid.NewGuid();
         DateTimeOffset startedAt = _clock.GetUtcNow();
         var samples = new List<BaselineSample>();
+        _anchors.Clear();
+        _pumps = null;
 
         try
         {
@@ -51,18 +57,25 @@ public sealed class BaselineRunner
                 return StopAndPersist(id, startedAt, samples, BaselineRunStatus.Aborted, abort);
             }
 
-            abort = await RunPhaseAsync(
+            _workload.ApplyEveryday(HeatProfile.CpuOnly);
+            abort = await RunAnchorHoldAsync(
                 BaselinePhase.Everyday,
-                WorkloadLevel.Everyday,
-                _schedule.Everyday,
                 startedAt,
                 samples,
+                "Adding CPU-only heat with the safe worker count. GPU work is off. Fans are not being changed.",
                 progress,
                 cancellationToken).ConfigureAwait(false);
             if (abort is not null)
             {
                 return StopAndPersist(id, startedAt, samples, BaselineRunStatus.Aborted, abort);
             }
+
+            _anchors.Add(new HeatAnchor(
+                HeatAnchorKind.Cpu,
+                HeatProfile.CpuOnly,
+                _lastAssessment,
+                _lastReference,
+                GpuRiseCelsius: null));
 
             double? idleGpu = IdleGpu(samples);
             HeatCalibrationResult calibration = await HeatCalibrator.RunAsync(
@@ -75,7 +88,8 @@ public sealed class BaselineRunner
                 _schedule.SamplePeriod,
                 _delay,
                 progress,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken,
+                HeatProfile.GpuStart).ConfigureAwait(false);
             if (calibration.AbortDetail is not null)
             {
                 return StopAndPersist(
@@ -86,18 +100,47 @@ public sealed class BaselineRunner
                     calibration.AbortDetail);
             }
 
-            abort = await RunPhaseAsync(
-                BaselinePhase.Low,
-                WorkloadLevel.Low,
-                _schedule.Low,
+            HeatProfile gpuProfile = calibration.Profile;
+            abort = await RunAnchorHoldAsync(
+                BaselinePhase.Gpu,
                 startedAt,
                 samples,
+                "Holding the GPU heat. A rise near 15 °C only stops the search. Fans are not being changed.",
                 progress,
                 cancellationToken).ConfigureAwait(false);
             if (abort is not null)
             {
                 return StopAndPersist(id, startedAt, samples, BaselineRunStatus.Aborted, abort);
             }
+
+            _anchors.Add(new HeatAnchor(
+                HeatAnchorKind.Gpu,
+                gpuProfile,
+                _lastAssessment,
+                _lastReference,
+                Rise(idleGpu, _lastReference)));
+
+            HeatProfile mixed = gpuProfile with { CpuWorkers = HeatProfile.EverydayCpuWorkers };
+            _workload.ApplyLow(mixed);
+            _workload.Set(WorkloadLevel.Low);
+            abort = await RunAnchorHoldAsync(
+                BaselinePhase.Low,
+                startedAt,
+                samples,
+                "Adding the safe CPU load and the frozen GPU heat together. Fans are not being changed.",
+                progress,
+                cancellationToken).ConfigureAwait(false);
+            if (abort is not null)
+            {
+                return StopAndPersist(id, startedAt, samples, BaselineRunStatus.Aborted, abort);
+            }
+
+            _anchors.Add(new HeatAnchor(
+                HeatAnchorKind.Mixed,
+                mixed,
+                _lastAssessment,
+                _lastReference,
+                Rise(idleGpu, _lastReference)));
 
             var referenceHolds = new List<HardwareSnapshot>(ReferenceStability.HoldCount);
             abort = await RunReferenceHoldsAsync(
@@ -161,6 +204,12 @@ public sealed class BaselineRunner
             }
 
             HardwareSnapshot snapshot = _hardware.ReadSnapshot();
+            _pumps ??= PumpWatch.Capture(snapshot);
+            if (heating && _pumps.Check(snapshot) is string pumpSilent)
+            {
+                return pumpSilent;
+            }
+
             samples.Add(new BaselineSample(_clock.GetUtcNow(), phase, snapshot));
             sampled = true;
             progress?.Report(new BaselineProgress(phase, snapshot, Describe(phase)));
@@ -209,8 +258,13 @@ public sealed class BaselineRunner
                     return $"Baseline reached the {SafetyLimits.MaxExperimentDurationMinutes}-minute abort limit.";
                 }
 
-                HardwareSnapshot snapshot = _hardware.ReadSnapshot();
                 DateTimeOffset now = _clock.GetUtcNow();
+                HardwareSnapshot snapshot = _hardware.ReadSnapshot() with { CapturedAt = now };
+                _pumps ??= PumpWatch.Capture(snapshot);
+                if (_pumps.Check(snapshot) is string pumpSilent)
+                {
+                    return pumpSilent;
+                }
                 samples.Add(new BaselineSample(now, BaselinePhase.Reference, snapshot));
                 window.Add(snapshot);
                 progress?.Report(new BaselineProgress(
@@ -224,9 +278,16 @@ public sealed class BaselineRunner
                     return SafetyLimits.Describe(abort.Value, _limits);
                 }
 
-                if (TemperatureSettle.RelevantTempsSettled(window) || now >= deadline)
+                bool timedOut = now >= deadline;
+                HoldAssessment assessment = HoldAssessor.Evaluate(window, timedOut);
+                if (assessment == HoldAssessment.SettledMeasured)
                 {
                     holds.Add(snapshot);
+                    break;
+                }
+
+                if (timedOut)
+                {
                     break;
                 }
 
@@ -235,6 +296,66 @@ public sealed class BaselineRunner
         }
 
         return null;
+    }
+
+    private async Task<string?> RunAnchorHoldAsync(
+        BaselinePhase phase,
+        DateTimeOffset startedAt,
+        List<BaselineSample> samples,
+        string message,
+        IProgress<BaselineProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        var window = new List<HardwareSnapshot>();
+        DateTimeOffset deadline = _clock.GetUtcNow() + FanTestSchedule.Default.Timeout;
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (_clock.GetUtcNow() - startedAt >= TimeSpan.FromMinutes(SafetyLimits.MaxExperimentDurationMinutes))
+            {
+                return $"Baseline reached the {SafetyLimits.MaxExperimentDurationMinutes}-minute abort limit.";
+            }
+
+            DateTimeOffset now = _clock.GetUtcNow();
+            HardwareSnapshot snapshot = _hardware.ReadSnapshot() with { CapturedAt = now };
+            _pumps ??= PumpWatch.Capture(snapshot);
+            if (_pumps.Check(snapshot) is string pumpSilent)
+            {
+                return pumpSilent;
+            }
+
+            samples.Add(new BaselineSample(now, phase, snapshot));
+            window.Add(snapshot);
+            progress?.Report(new BaselineProgress(phase, snapshot, message));
+
+            ThermalAbortReason? abort = SafetyLimits.EvaluateWhileHeating(snapshot, _workload, _limits);
+            if (abort is not null)
+            {
+                return SafetyLimits.Describe(abort.Value, _limits);
+            }
+
+            bool timedOut = now >= deadline;
+            HoldAssessment assessment = HoldAssessor.Evaluate(window, timedOut);
+            if (assessment == HoldAssessment.SettledMeasured || assessment != HoldAssessment.TransientModeled)
+            {
+                _lastAssessment = assessment;
+                _lastReference = snapshot;
+                return null;
+            }
+
+            await _delay(_schedule.SamplePeriod, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private static double? Rise(double? idleGpuCelsius, HardwareSnapshot? snapshot)
+    {
+        if (idleGpuCelsius is not double idle || snapshot is null)
+        {
+            return null;
+        }
+
+        double? gpu = PreferredTemperature.Read(snapshot, SensorKind.GpuTemperature);
+        return gpu is double value ? value - idle : null;
     }
 
     private BaselineRun StopAndPersist(
@@ -269,7 +390,8 @@ public sealed class BaselineRunner
             samples.ToArray(),
             metrics,
             _workload.LockedEveryday,
-            _workload.LockedLow);
+            _workload.LockedLow,
+            Anchors: _anchors.ToArray());
         _store.Save(run);
         return run;
     }
@@ -293,8 +415,12 @@ public sealed class BaselineRunner
         phase switch
         {
             BaselinePhase.Idle => "Watching the PC at rest. Fans are not being changed.",
-            BaselinePhase.Everyday => "Adding everyday heat, closer to normal use. Fans are not being changed.",
-            BaselinePhase.Low => "Adding stronger heat so later fan tests can see a clear change. Fans are not being changed.",
+            BaselinePhase.Everyday =>
+                "Adding CPU-only heat with the safe worker count. GPU work is off. Fans are not being changed.",
+            BaselinePhase.Gpu =>
+                "Holding GPU heat. About 15 °C of rise is the search aim, not proof a fan worked.",
+            BaselinePhase.Low =>
+                "Adding the safe CPU load and the frozen GPU heat together. Fans are not being changed.",
             BaselinePhase.High => "Adding heavier heat. Fans are not being changed. This can get close to the 90 °C limit.",
             BaselinePhase.Reference =>
                 "Checking how much this PC moves on its own. Same heat, fans still on BIOS.",

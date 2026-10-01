@@ -1,5 +1,7 @@
 # Path B Phase 1 — Experiment foundation plan
 
+> **Historical as of 2026-09-21.** Safety, restore, raw samples, stored heat, below-BIOS writes, and Unknown rules in this file remain useful. The fixed Idle → Everyday → Low → Hot ladder, the mandatory dense grid, the two-end Hold ending, the one-point-per-heat curve rule, and a BIOS proof of that two-end policy are superseded by [PRODUCT_DIRECTION.md](PRODUCT_DIRECTION.md). Do not implement the next slice from this file.
+
 **Date:** 2026-09-21 (locks refreshed same day after Danny chat)  
 **For:** Pike review (Ship / Ship after fixes / Do not ship)  
 **Status:** Plan only. Do not implement product C#/XAML in this pass.  

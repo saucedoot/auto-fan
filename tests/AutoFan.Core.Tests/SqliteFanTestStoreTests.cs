@@ -68,7 +68,10 @@ public sealed class SqliteFanTestStoreTests
                 "Front intake",
                 FanTestStage.Reference,
                 snapshot,
-                Settled: true),
+                Settled: true,
+                Assessment: HoldAssessment.SettledMeasured,
+                CommandedDutyPercent: 40,
+                HoldId: 3),
             new FanTestSample(
                 started.AddSeconds(1),
                 FakeHardwareBackend.FrontFanId,
@@ -76,7 +79,9 @@ public sealed class SqliteFanTestStoreTests
                 FanTestStage.Perturb,
                 snapshot,
                 Settled: false,
-                HeatId: HeatId.Everyday),
+                HeatId: HeatId.Everyday,
+                Assessment: HoldAssessment.TimedOut,
+                HoldId: 4),
         ];
         InfluenceEntry[] influence =
         [
@@ -155,8 +160,13 @@ public sealed class SqliteFanTestStoreTests
         Assert.Equal(expected.Samples[0].Stage, actual.Samples[0].Stage);
         Assert.Equal(expected.Samples[0].Settled, actual.Samples[0].Settled);
         Assert.Equal(expected.Samples[0].HeatId, actual.Samples[0].HeatId);
+        Assert.Equal(expected.Samples[0].Assessment, actual.Samples[0].Assessment);
+        Assert.Equal(expected.Samples[0].CommandedDutyPercent, actual.Samples[0].CommandedDutyPercent);
+        Assert.Equal(expected.Samples[0].HoldId, actual.Samples[0].HoldId);
         Assert.Equal(expected.Samples[1].Settled, actual.Samples[1].Settled);
         Assert.Equal(expected.Samples[1].HeatId, actual.Samples[1].HeatId);
+        Assert.Equal(expected.Samples[1].Assessment, actual.Samples[1].Assessment);
+        Assert.Equal(expected.Samples[1].HoldId, actual.Samples[1].HoldId);
         Assert.Equal(expected.Influence.Count, actual.Influence.Count);
         Assert.Equal(expected.Influence[0].Effect, actual.Influence[0].Effect);
         Assert.Equal(expected.Influence[0].DeltaCelsius, actual.Influence[0].DeltaCelsius);

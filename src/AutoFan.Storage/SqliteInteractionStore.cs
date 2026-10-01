@@ -67,8 +67,10 @@ public sealed class SqliteInteractionStore : IInteractionStore, IDisposable
                     """
                     INSERT INTO interaction_sample (
                         run_id, captured_utc, first_group_id, first_group_name,
-                        second_group_id, second_group_name, step, snapshot_json, settled)
-                    VALUES ($run, $captured, $first, $firstName, $second, $secondName, $step, $snapshot, $settled);
+                        second_group_id, second_group_name, step, snapshot_json, settled,
+                        assessment, commanded_duty, hold_id)
+                    VALUES ($run, $captured, $first, $firstName, $second, $secondName, $step, $snapshot, $settled,
+                        $assessment, $duty, $hold);
                     """;
                 command.Parameters.AddWithValue("$run", run.Id.ToString("D"));
                 command.Parameters.AddWithValue("$captured", sample.CapturedAt.ToString("O"));
@@ -79,6 +81,9 @@ public sealed class SqliteInteractionStore : IInteractionStore, IDisposable
                 command.Parameters.AddWithValue("$step", sample.Step.ToString());
                 command.Parameters.AddWithValue("$snapshot", JsonSerializer.Serialize(sample.Snapshot, JsonOptions));
                 command.Parameters.AddWithValue("$settled", sample.Settled ? 1 : 0);
+                command.Parameters.AddWithValue("$assessment", sample.Assessment.ToString());
+                command.Parameters.AddWithValue("$duty", (object?)sample.CommandedDutyPercent ?? DBNull.Value);
+                command.Parameters.AddWithValue("$hold", sample.HoldId);
                 command.ExecuteNonQuery();
             }
 
@@ -191,6 +196,9 @@ public sealed class SqliteInteractionStore : IInteractionStore, IDisposable
                 step TEXT NOT NULL,
                 snapshot_json TEXT NOT NULL,
                 settled INTEGER NOT NULL DEFAULT 0,
+                assessment TEXT NOT NULL DEFAULT 'TransientModeled',
+                commanded_duty INTEGER,
+                hold_id INTEGER NOT NULL DEFAULT 0,
                 FOREIGN KEY (run_id) REFERENCES interaction_run(id)
             );
             CREATE TABLE IF NOT EXISTS interaction_entry (
@@ -220,6 +228,9 @@ public sealed class SqliteInteractionStore : IInteractionStore, IDisposable
             """;
         command.ExecuteNonQuery();
         EnsureColumn("interaction_sample", "settled", "INTEGER NOT NULL DEFAULT 0");
+        EnsureColumn("interaction_sample", "assessment", "TEXT NOT NULL DEFAULT 'TransientModeled'");
+        EnsureColumn("interaction_sample", "commanded_duty", "INTEGER");
+        EnsureColumn("interaction_sample", "hold_id", "INTEGER NOT NULL DEFAULT 0");
     }
 
     private void EnsureColumn(string table, string column, string sqlType)
@@ -271,7 +282,8 @@ public sealed class SqliteInteractionStore : IInteractionStore, IDisposable
             sampleCommand.CommandText =
                 """
                 SELECT captured_utc, first_group_id, first_group_name, second_group_id,
-                       second_group_name, step, snapshot_json, settled
+                       second_group_name, step, snapshot_json, settled,
+                       assessment, commanded_duty, hold_id
                 FROM interaction_sample WHERE run_id = $id ORDER BY id;
                 """;
             sampleCommand.Parameters.AddWithValue("$id", idText);
@@ -294,7 +306,10 @@ public sealed class SqliteInteractionStore : IInteractionStore, IDisposable
                     reader.GetString(4),
                     Enum.Parse<InteractionStep>(reader.GetString(5)),
                     snapshot,
-                    reader.GetInt32(7) != 0));
+                    reader.GetInt32(7) != 0,
+                    ParseAssessment(reader),
+                    reader.IsDBNull(9) ? null : reader.GetInt32(9),
+                    reader.IsDBNull(10) ? 0 : reader.GetInt32(10)));
             }
         }
 
@@ -346,6 +361,18 @@ public sealed class SqliteInteractionStore : IInteractionStore, IDisposable
         }
 
         return new InteractionRun(id, started, finished, status, abort, gpu, samples, effects, skipped);
+    }
+
+    private static HoldAssessment ParseAssessment(SqliteDataReader reader)
+    {
+        if (reader.FieldCount <= 8 || reader.IsDBNull(8))
+        {
+            return HoldAssessment.TransientModeled;
+        }
+
+        return Enum.TryParse(reader.GetString(8), out HoldAssessment assessment)
+            ? assessment
+            : HoldAssessment.TransientModeled;
     }
 
     private static DateTimeOffset ParseTime(string value) =>

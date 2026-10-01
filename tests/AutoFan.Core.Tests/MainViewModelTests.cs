@@ -566,7 +566,7 @@ public sealed class MainViewModelTests
         Assert.Equal(InfluenceTarget.Cpu, viewModel.SelectedRpmPlotTarget.Target);
         Assert.True(viewModel.IsCpuRpmPlotTarget);
         Assert.False(viewModel.IsGpuRpmPlotTarget);
-        Assert.Contains("measured speed curve", viewModel.DiminishingReturnsProgressText, StringComparison.Ordinal);
+        Assert.Contains("Low heat only", viewModel.DiminishingReturnsProgressText, StringComparison.Ordinal);
         Assert.Contains(
             viewModel.DiminishingReturnsResults,
             row => row.Name.Contains("Front intake on the CPU, useful", StringComparison.Ordinal)

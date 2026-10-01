@@ -74,7 +74,7 @@ public sealed class OptimizeWalkViewModel : INotifyPropertyChanged
 
         if (Step == OptimizeWalkStep.Fans && Phase == OptimizeWalkPhase.Done)
         {
-            GoTo(OptimizeWalkStep.Hold, OptimizeWalkPhase.Ready);
+            PrimaryRequested?.Invoke(this, EventArgs.Empty);
             return;
         }
 
@@ -186,7 +186,7 @@ public sealed class OptimizeWalkViewModel : INotifyPropertyChanged
             (OptimizeWalkStep.Fans, OptimizeWalkPhase.Running) =>
                 ("Test fans", FansDetail, "Start fan tests"),
             (OptimizeWalkStep.Fans, OptimizeWalkPhase.Done) =>
-                ("Test fans", FansDetail, "Continue"),
+                ("Test fans", FansDoneDetail, "Finish"),
             (OptimizeWalkStep.Hold, OptimizeWalkPhase.Ready) =>
                 ("Hold this setting", HoldDetail, "Hold this setting"),
             (OptimizeWalkStep.Hold, OptimizeWalkPhase.Running) =>
@@ -204,7 +204,6 @@ public sealed class OptimizeWalkViewModel : INotifyPropertyChanged
             Marker("Before we start", OptimizeWalkStep.Consent, current, currentDone),
             Marker("Watch this PC", OptimizeWalkStep.Watch, current, currentDone),
             Marker("Test fans", OptimizeWalkStep.Fans, current, currentDone),
-            Marker("Hold this setting", OptimizeWalkStep.Hold, current, currentDone),
         ];
     }
 
@@ -226,10 +225,13 @@ public sealed class OptimizeWalkViewModel : INotifyPropertyChanged
         "This step does not change fans. It heats the CPU and GPU a little so later tests have a baseline.";
 
     private const string FansDetail =
-        "Each connected fan is set to a few speeds. Pair tests run only if those measurements finish. You can cancel; finished measurements still help.";
+        "Each connected fan is set to a few speeds. Pair tests run only if those measurements finish. You can cancel; finished measurements are kept, and the fans go back.";
+
+    private const string FansDoneDetail =
+        "The measurements are saved. Finish puts motherboard fans back on BIOS and NVIDIA fans back on the driver. This test does not apply a fan curve.";
 
     private const string HoldDetail =
-        "Apply the quiet-versus-cool setting chosen on Home. Motherboard and NVIDIA fans follow it while AUTO Fan stays open.";
+        "Legacy only. The old two-speed setting is not a temperature curve.";
 
     private void OnPropertyChanged(string propertyName) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));

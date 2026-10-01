@@ -13,6 +13,8 @@ public sealed class InteractionRunner
     private readonly ThermalAbortLimits _limits;
     private readonly FanPresence? _presence;
     private readonly HeatProfile? _lowHeat;
+    private int _nextHoldId;
+    private PumpWatch? _pumps;
 
     public InteractionRunner(
         IHardwareBackend hardware,
@@ -363,6 +365,9 @@ public sealed class InteractionRunner
     {
         var snapshots = new List<HardwareSnapshot>();
         int holdStart = samples.Count;
+        int holdId = _nextHoldId++;
+        bool writesFirst = step is InteractionStep.First or InteractionStep.Combined;
+        bool writesSecond = step is InteractionStep.Second or InteractionStep.Combined;
         DateTimeOffset deadline = _clock.GetUtcNow() + _schedule.Timeout;
         while (true)
         {
@@ -378,9 +383,21 @@ public sealed class InteractionRunner
                 return session.AbortDetail ?? "Interaction test aborted by safety limits.";
             }
 
-            HardwareSnapshot snapshot = _hardware.ReadSnapshot();
             DateTimeOffset now = _clock.GetUtcNow();
+            HardwareSnapshot snapshot = _hardware.ReadSnapshot() with { CapturedAt = now };
             _trend.Add(now, snapshot);
+            _pumps ??= PumpWatch.Capture(snapshot);
+            if (_pumps.Check(snapshot) is string pumpSilent)
+            {
+                return pumpSilent;
+            }
+
+            ThermalAbortReason? ceiling = SafetyLimits.EvaluateWhileHeating(snapshot, _workload, _limits);
+            if (ceiling is not null)
+            {
+                return SafetyLimits.Describe(ceiling.Value, _limits);
+            }
+
             if (_trend.Evaluate(_limits) is ThermalAbortReason rise)
             {
                 return SafetyLimits.Describe(rise);
@@ -394,7 +411,8 @@ public sealed class InteractionRunner
                 second.Name,
                 step,
                 snapshot,
-                Settled: false));
+                Settled: false,
+                HoldId: holdId));
             snapshots.Add(snapshot);
             progress?.Report(new InteractionProgress(snapshot, message));
 
@@ -403,14 +421,22 @@ public sealed class InteractionRunner
                 return SafetyLimits.Describe(abort, _limits);
             }
 
-            if (TemperatureSettle.RelevantTempsSettled(snapshots))
+            bool timedOut = now >= deadline;
+            HoldAssessment assessment = HoldAssessor.Evaluate(
+                snapshots,
+                timedOut,
+                writesFirst ? first.Id : null,
+                dutyCommanded: writesFirst || writesSecond,
+                writesSecond ? second.Id : null);
+            if (assessment == HoldAssessment.SettledMeasured)
             {
-                MarkSettled(samples, holdStart);
+                StampHold(samples, holdStart, assessment, settled: true);
                 return null;
             }
 
-            if (now >= deadline)
+            if (timedOut)
             {
+                StampHold(samples, holdStart, assessment, settled: false);
                 return null;
             }
 
@@ -445,11 +471,19 @@ public sealed class InteractionRunner
     private FanGroup? FindGroup(string id) =>
         _hardware.FanGroups.FirstOrDefault(fan => fan.Id == id);
 
-    private static void MarkSettled(List<InteractionSample> samples, int fromIndex)
+    private static void StampHold(
+        List<InteractionSample> samples,
+        int fromIndex,
+        HoldAssessment assessment,
+        bool settled)
     {
         for (int index = fromIndex; index < samples.Count; index++)
         {
-            samples[index] = samples[index] with { Settled = true };
+            samples[index] = samples[index] with
+            {
+                Settled = settled,
+                Assessment = assessment,
+            };
         }
     }
 

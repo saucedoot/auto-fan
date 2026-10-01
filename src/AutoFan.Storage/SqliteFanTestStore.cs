@@ -66,8 +66,10 @@ public sealed class SqliteFanTestStore : IFanTestStore, IDisposable
                 command.CommandText =
                     """
                     INSERT INTO fan_test_sample (
-                        run_id, captured_utc, fan_group_id, fan_group_name, stage, snapshot_json, settled, heat_id)
-                    VALUES ($run, $captured, $group, $name, $stage, $snapshot, $settled, $heat);
+                        run_id, captured_utc, fan_group_id, fan_group_name, stage, snapshot_json, settled, heat_id,
+                        assessment, commanded_duty, hold_id)
+                    VALUES ($run, $captured, $group, $name, $stage, $snapshot, $settled, $heat,
+                        $assessment, $duty, $hold);
                     """;
                 command.Parameters.AddWithValue("$run", run.Id.ToString("D"));
                 command.Parameters.AddWithValue("$captured", sample.CapturedAt.ToString("O"));
@@ -76,6 +78,9 @@ public sealed class SqliteFanTestStore : IFanTestStore, IDisposable
                 command.Parameters.AddWithValue("$stage", sample.Stage.ToString());
                 command.Parameters.AddWithValue("$snapshot", JsonSerializer.Serialize(sample.Snapshot, JsonOptions));
                 command.Parameters.AddWithValue("$settled", sample.Settled ? 1 : 0);
+                command.Parameters.AddWithValue("$assessment", sample.Assessment.ToString());
+                command.Parameters.AddWithValue("$duty", (object?)sample.CommandedDutyPercent ?? DBNull.Value);
+                command.Parameters.AddWithValue("$hold", sample.HoldId);
                 command.Parameters.AddWithValue("$heat", sample.HeatId.ToString());
                 command.ExecuteNonQuery();
             }
@@ -187,6 +192,9 @@ public sealed class SqliteFanTestStore : IFanTestStore, IDisposable
                 stage TEXT NOT NULL,
                 snapshot_json TEXT NOT NULL,
                 settled INTEGER NOT NULL DEFAULT 0,
+                assessment TEXT NOT NULL DEFAULT 'TransientModeled',
+                commanded_duty INTEGER,
+                hold_id INTEGER NOT NULL DEFAULT 0,
                 FOREIGN KEY (run_id) REFERENCES fan_test_run(id)
             );
             CREATE TABLE IF NOT EXISTS influence_entry (
@@ -217,6 +225,9 @@ public sealed class SqliteFanTestStore : IFanTestStore, IDisposable
         command.ExecuteNonQuery();
         EnsureColumn("fan_test_sample", "settled", "INTEGER NOT NULL DEFAULT 0");
         EnsureColumn("fan_test_sample", "heat_id", "TEXT NOT NULL DEFAULT 'Low'");
+        EnsureColumn("fan_test_sample", "assessment", "TEXT NOT NULL DEFAULT 'TransientModeled'");
+        EnsureColumn("fan_test_sample", "commanded_duty", "INTEGER");
+        EnsureColumn("fan_test_sample", "hold_id", "INTEGER NOT NULL DEFAULT 0");
     }
 
     private void EnsureColumn(string table, string column, string sqlType)
@@ -267,7 +278,8 @@ public sealed class SqliteFanTestStore : IFanTestStore, IDisposable
         {
             sampleCommand.CommandText =
                 """
-                SELECT captured_utc, fan_group_id, fan_group_name, stage, snapshot_json, settled, heat_id
+                SELECT captured_utc, fan_group_id, fan_group_name, stage, snapshot_json, settled, heat_id,
+                       assessment, commanded_duty, hold_id
                 FROM fan_test_sample WHERE run_id = $id ORDER BY id;
                 """;
             sampleCommand.Parameters.AddWithValue("$id", idText);
@@ -293,7 +305,10 @@ public sealed class SqliteFanTestStore : IFanTestStore, IDisposable
                     stage,
                     snapshot,
                     reader.GetInt32(5) != 0,
-                    ParseHeatId(reader)));
+                    ParseHeatId(reader),
+                    ParseAssessment(reader),
+                    reader.IsDBNull(8) ? null : reader.GetInt32(8),
+                    reader.IsDBNull(9) ? 0 : reader.GetInt32(9)));
             }
         }
 
@@ -345,6 +360,18 @@ public sealed class SqliteFanTestStore : IFanTestStore, IDisposable
         }
 
         return new FanTestRun(id, started, finished, status, abort, gpu, samples, influence, skipped);
+    }
+
+    private static HoldAssessment ParseAssessment(SqliteDataReader reader)
+    {
+        if (reader.FieldCount <= 7 || reader.IsDBNull(7))
+        {
+            return HoldAssessment.TransientModeled;
+        }
+
+        return Enum.TryParse(reader.GetString(7), out HoldAssessment assessment)
+            ? assessment
+            : HoldAssessment.TransientModeled;
     }
 
     private static HeatId ParseHeatId(SqliteDataReader reader)

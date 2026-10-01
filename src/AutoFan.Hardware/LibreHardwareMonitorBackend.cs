@@ -14,6 +14,8 @@ public sealed class LibreHardwareMonitorBackend : IHardwareBackend, IDisposable
     private readonly SoftwareControlLease _lease;
     private MappedHardware? _mapped;
     private string? _preferredGpuId;
+    private string? _resolvedNvidiaName;
+    private string? _resolvedNvidiaId;
     private bool _softwareControlActive;
     private bool _disposed;
 
@@ -84,6 +86,12 @@ public sealed class LibreHardwareMonitorBackend : IHardwareBackend, IDisposable
         _mapped = SensorTreeMapper.Map(
             SensorTreeReader.FromComputer(_computer),
             preferredGpuId: _preferredGpuId);
+        string? nvidiaId = ResolveNvidiaId(_mapped.Identity);
+        if (!string.Equals(nvidiaId, _mapped.Identity.GpuHardwareId, StringComparison.Ordinal))
+        {
+            _mapped = _mapped with { Identity = _mapped.Identity with { GpuHardwareId = nvidiaId } };
+        }
+
         return _mapped.Snapshot;
     }
 
@@ -138,7 +146,10 @@ public sealed class LibreHardwareMonitorBackend : IHardwareBackend, IDisposable
             }
 
             _lease.OnTakingControl();
-            DutySetResult nvidia = NvidiaFanWriter.TrySetDuty(Identity.GpuName, duty.Value);
+            DutySetResult nvidia = NvidiaFanWriter.TrySetDuty(
+                Identity.GpuName,
+                duty.Value,
+                ResolveNvidiaId(Identity));
             if (!nvidia.Accepted)
             {
                 RestoreDefaults();
@@ -207,6 +218,28 @@ public sealed class LibreHardwareMonitorBackend : IHardwareBackend, IDisposable
         NvidiaFanWriter.RestoreAll();
         _softwareControlActive = false;
         _lease.OnRestored();
+    }
+
+    private string? ResolveNvidiaId(HardwareIdentity identity)
+    {
+        if (!string.IsNullOrWhiteSpace(identity.GpuHardwareId))
+        {
+            return identity.GpuHardwareId;
+        }
+
+        if (string.IsNullOrWhiteSpace(identity.GpuName))
+        {
+            return null;
+        }
+
+        if (string.Equals(_resolvedNvidiaName, identity.GpuName, StringComparison.Ordinal))
+        {
+            return _resolvedNvidiaId;
+        }
+
+        _resolvedNvidiaName = identity.GpuName;
+        _resolvedNvidiaId = NvidiaFanWriter.TryResolveId(identity.GpuName);
+        return _resolvedNvidiaId;
     }
 
     public void Dispose()

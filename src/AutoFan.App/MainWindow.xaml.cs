@@ -17,6 +17,7 @@ public partial class MainWindow : Window
     private readonly SqliteFanTestStore _fanTestStore;
     private readonly SqliteInteractionStore _interactionStore;
     private readonly SqlitePolicyConfirmationStore _confirmationStore;
+    private readonly SqliteCurveStore _curveStore;
     private readonly JsonUserSettingsStore _settingsStore;
     private readonly MainViewModel _viewModel;
     private readonly DispatcherTimer _policyTimer;
@@ -50,6 +51,7 @@ public partial class MainWindow : Window
         _fanTestStore = SqliteFanTestStore.OpenLocalAppData();
         _interactionStore = SqliteInteractionStore.OpenLocalAppData();
         _confirmationStore = SqlitePolicyConfirmationStore.OpenLocalAppData();
+        _curveStore = SqliteCurveStore.OpenLocalAppData();
         _settingsStore = JsonUserSettingsStore.OpenLocalAppData();
         CoolingPreferences preferences = _settingsStore.Load();
         _hardware.SetPreferredGpu(preferences.PreferredGpuId);
@@ -63,6 +65,7 @@ public partial class MainWindow : Window
         _workload = new SyntheticWorkloadActuator(_hardware.Identity.GpuName);
         EnvironmentStatus environment = EnvironmentProbe.Check(_hardware.OpenError);
         _viewModel = new MainViewModel(result, _hardware.Identity, environment, preferences);
+        _viewModel.SaveCurve = profile => _curveStore.Save(profile);
         _viewModel.SetAvailableGpus(_hardware.Gpus);
         DataContext = _viewModel;
         InitializeComponent();
@@ -74,6 +77,27 @@ public partial class MainWindow : Window
         RefreshModel();
         _viewModel.UpdateLiveReadings(_hardware.ReadSnapshot());
         _liveTimer.Start();
+    }
+
+    private void OnSaveCurvePoint(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || button.DataContext is not HomeCurvePointRow row)
+        {
+            return;
+        }
+
+        if (button.Parent is not Panel panel)
+        {
+            return;
+        }
+
+        TextBox? box = panel.Children.OfType<TextBox>().FirstOrDefault();
+        if (box is null || !int.TryParse(box.Text, out int duty))
+        {
+            return;
+        }
+
+        _viewModel.TryEditCurve(row.GroupId, row.Sensor, row.TemperatureCelsius, duty);
     }
 
     private void OnLiveTick(object? sender, EventArgs e)
@@ -96,6 +120,11 @@ public partial class MainWindow : Window
         if (_interactionStore.GetLatest() is InteractionRun interaction)
         {
             _viewModel.FinishInteraction(interaction);
+        }
+
+        if (_curveStore.GetLatest() is CoolingProfile curve)
+        {
+            _viewModel.NoteSavedCurve(curve, CurveActuator.MayTakeControl(curve));
         }
     }
 
@@ -405,10 +434,18 @@ public partial class MainWindow : Window
                 await RunWalkWatchAsync().ConfigureAwait(true);
                 break;
             case OptimizeWalkStep.Fans:
-                await RunWalkFansAsync().ConfigureAwait(true);
+                if (_walk.Phase == OptimizeWalkPhase.Done)
+                {
+                    FinishWalk();
+                }
+                else
+                {
+                    await RunWalkFansAsync().ConfigureAwait(true);
+                }
+
                 break;
             case OptimizeWalkStep.Hold:
-                await RunWalkHoldAsync().ConfigureAwait(true);
+                FinishWalk();
                 break;
         }
     }
@@ -422,29 +459,11 @@ public partial class MainWindow : Window
 
         _walkClosing = true;
         _optimizeCts?.Cancel();
-        bool apply = _walk?.TestsStarted == true;
-        if (!apply)
+        _workload.Stop();
+        _hardware.RestoreDefaults();
+        if (_viewModel.IsOptimizeRunning)
         {
-            _workload.Stop();
-            _hardware.RestoreDefaults();
-            if (_viewModel.IsOptimizeRunning)
-            {
-                _viewModel.FinishOptimize();
-            }
-
-            CloseWalk();
-            return;
-        }
-
-        try
-        {
-            await ApplyRecommendedPolicyAsync().ConfigureAwait(true);
-        }
-        catch (Exception exception)
-        {
-            _workload.Stop();
-            _hardware.RestoreDefaults();
-            _viewModel.FailOptimize(exception.Message);
+            _viewModel.FinishOptimize();
         }
 
         CloseWalk();
@@ -513,23 +532,17 @@ public partial class MainWindow : Window
         CancellationToken token = _optimizeCts.Token;
         _walk.BeginCurrent();
         _viewModel.BeginOptimize();
-        ReportWalk("Testing fans. Waiting until CPU and GPU are cool enough.");
+        ReportWalk("Checking fans one at a time: a reference, a change, then the same reference again.");
         try
         {
-            FanTestRun fanTest = await new FanTestRunner(
+            FanTestRun fanTest = await new ScreenRunner(
                     _hardware,
                     _workload,
                     _scanner,
                     _fanTestStore,
                     limits: CurrentAbortLimits(),
-                    presence: CurrentPresence(),
-                    gpuHeatUseful: GpuHeat.IsUseful(_baselineStore.GetLatest()),
-                    stability: ReferenceStability.FromBaseline(_baselineStore.GetLatest()),
                     lowHeat: StoredLowHeat(),
-                    everydayHeat: StoredEverydayHeat(),
-                    everydayGpuHeatUseful: GpuHeat.EverydayIsUseful(_baselineStore.GetLatest()),
-                    baseline: _baselineStore.GetLatest(),
-                    baselineStore: _baselineStore)
+                    actuation: _viewModel.Actuation)
                 .RunAsync(
                     token,
                     new Progress<FanTestProgress>(update => ReportWalk(update.Message)))
@@ -570,6 +583,45 @@ public partial class MainWindow : Window
             else
             {
                 _walkPairsSkipped = true;
+                if (fanTest.Status == FanTestRunStatus.Completed
+                    && OptimizeWalkOutcome.HasModeledRank(fanTest.Influence))
+                {
+                    JointSearchResult joint = await new JointRunner(
+                            _hardware,
+                            _workload,
+                            _scanner,
+                            limits: CurrentAbortLimits(),
+                            heat: StoredLowHeat(),
+                            actuation: _viewModel.Actuation)
+                        .RunAsync(
+                            fanTest,
+                            token,
+                            new Progress<FanTestProgress>(update => ReportWalk(update.Message)))
+                        .ConfigureAwait(true);
+                    _viewModel.RememberJoint(joint);
+                    if (joint.AbortDetail is not null)
+                    {
+                        _walk.Fail(joint.AbortDetail);
+                        return;
+                    }
+
+                    ReportWalk(joint.Detail);
+                    var minimumStable = new Dictionary<string, int>(StringComparer.Ordinal);
+                    foreach (FanActuation fan in _viewModel.Actuation)
+                    {
+                        if (fan.MinimumStableDutyPercent is int duty && duty > 0)
+                        {
+                            minimumStable[fan.FanGroupId] = duty;
+                        }
+                    }
+
+                    CoolingProfile draft = CurveBuilder.Build(
+                        [],
+                        CurrentAbortLimits(),
+                        minimumStable);
+                    _curveStore.Save(draft);
+                    ReportWalk(draft.Detail);
+                }
             }
 
             if (_walkClosing)
@@ -591,37 +643,39 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task RunWalkHoldAsync()
+    private void FinishWalk()
     {
-        if (_walk is null)
+        _optimizeCts?.Cancel();
+        _workload.Stop();
+        _hardware.RestoreDefaults();
+        if (_viewModel.IsOptimizeRunning)
+        {
+            _viewModel.FinishOptimize();
+        }
+
+        CloseWalk();
+    }
+
+    private async void OnLegacyHold(object sender, RoutedEventArgs e)
+    {
+        if (_viewModel.IsOptimizeRunning
+            || _viewModel.IsBaselineRunning
+            || _viewModel.IsFanTestRunning
+            || _viewModel.IsInteractionRunning
+            || _viewModel.IsFanPresenceRunning)
         {
             return;
         }
 
-        _walk.BeginCurrent();
-        _viewModel.BeginOptimize();
-        ReportWalk("Applying the chosen fan speeds.");
         try
         {
             await ApplyRecommendedPolicyAsync().ConfigureAwait(true);
-            if (_walkClosing)
-            {
-                return;
-            }
-
-            CloseWalk();
-        }
-        catch (OperationCanceledException)
-        {
-            await ApplyRecommendedPolicyAsync().ConfigureAwait(true);
-            CloseWalk();
         }
         catch (Exception exception)
         {
             _workload.Stop();
             _hardware.RestoreDefaults();
             _viewModel.FailOptimize(exception.Message);
-            _walk.Fail(exception.Message);
         }
     }
 
@@ -661,7 +715,10 @@ public partial class MainWindow : Window
             _fanTestStore.GetLatest(),
             CurrentInteraction());
         IReadOnlyList<FanSpeedCurve> curves = FanSpeedCurveBuilder.Build(_fanTestStore.GetLatest()?.Samples);
-        DiminishingReturnsReport returns = DiminishingReturnsAnalyzer.Analyze(curves);
+        IReadOnlyList<FanSpeedCurve> lowCurves = curves
+            .Where(curve => curve.Heat == HeatId.Low)
+            .ToArray();
+        DiminishingReturnsReport returns = DiminishingReturnsAnalyzer.Analyze(lowCurves);
         CoolingPreferences preferences = _viewModel.CurrentPreferences();
         _settingsStore.Save(preferences);
         CoolingPolicy? policy = PolicyOptimizer.Recommend(model, returns, preferences);
@@ -935,7 +992,10 @@ public partial class MainWindow : Window
             _fanTestStore.GetLatest(),
             CurrentInteraction());
         IReadOnlyList<FanSpeedCurve> curves = FanSpeedCurveBuilder.Build(_fanTestStore.GetLatest()?.Samples);
-        DiminishingReturnsReport returns = DiminishingReturnsAnalyzer.Analyze(curves);
+        IReadOnlyList<FanSpeedCurve> lowCurves = curves
+            .Where(curve => curve.Heat == HeatId.Low)
+            .ToArray();
+        DiminishingReturnsReport returns = DiminishingReturnsAnalyzer.Analyze(lowCurves);
         _viewModel.ShowModel(model);
         _viewModel.ShowDiminishingReturns(returns, curves);
         PolicyConfirmation? confirmation = _confirmationStore.GetLatest();
@@ -962,6 +1022,7 @@ public partial class MainWindow : Window
         _fanTestStore.Dispose();
         _interactionStore.Dispose();
         _confirmationStore.Dispose();
+        _curveStore.Dispose();
         _workload.Dispose();
         _hardware.Dispose();
     }

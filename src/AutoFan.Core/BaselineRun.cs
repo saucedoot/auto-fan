@@ -12,4 +12,8 @@ public sealed record BaselineRun(
     IReadOnlyList<BaselineMetric> Metrics,
     HeatProfile? EverydayProfile = null,
     HeatProfile? LowProfile = null,
-    HeatProfile? HotProfile = null);
+    HeatProfile? HotProfile = null,
+    IReadOnlyList<HeatAnchor>? Anchors = null)
+{
+    public IReadOnlyList<HeatAnchor> HeatAnchors => Anchors ?? [];
+}

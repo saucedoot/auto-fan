@@ -20,6 +20,12 @@ public sealed record HeatProfile(
 
     public static HeatProfile Everyday { get; } = new(EverydayCpuWorkers, 1280, 720, 1, 16);
 
+    public const int GpuRasterCpuWorkers = 1;
+
+    public static HeatProfile CpuOnly { get; } = new(EverydayCpuWorkers, 0, 0, 0, 0);
+
+    public static HeatProfile GpuStart { get; } = new(GpuRasterCpuWorkers, 2560, 1440, 1, 64);
+
     public static HeatProfile StartingLow { get; } = new(EverydayCpuWorkers, 2560, 1440, 1, 64);
 
     public static HeatProfile DefaultLow { get; } = new(EverydayCpuWorkers, 2560, 1440, 4, 64);

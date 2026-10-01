@@ -48,8 +48,8 @@ public sealed class SqliteBaselineStore : IBaselineStore, IDisposable
                     """
                     INSERT INTO baseline_run (
                         id, started_utc, finished_utc, status, abort_detail, ambient_celsius, gpu_load_available,
-                        everyday_heat_json, low_heat_json, hot_heat_json)
-                    VALUES ($id, $started, $finished, $status, $abort, $ambient, $gpu, $everyday, $low, $hot);
+                        everyday_heat_json, low_heat_json, hot_heat_json, anchors_json)
+                    VALUES ($id, $started, $finished, $status, $abort, $ambient, $gpu, $everyday, $low, $hot, $anchors);
                     """;
                 command.Parameters.AddWithValue("$id", run.Id.ToString("D"));
                 command.Parameters.AddWithValue("$started", run.StartedAt.ToString("O"));
@@ -61,6 +61,7 @@ public sealed class SqliteBaselineStore : IBaselineStore, IDisposable
                 command.Parameters.AddWithValue("$everyday", ToHeatJson(run.EverydayProfile));
                 command.Parameters.AddWithValue("$low", ToHeatJson(run.LowProfile));
                 command.Parameters.AddWithValue("$hot", ToHeatJson(run.HotProfile));
+                command.Parameters.AddWithValue("$anchors", ToAnchorsJson(run.HeatAnchors));
                 command.ExecuteNonQuery();
             }
 
@@ -201,6 +202,7 @@ public sealed class SqliteBaselineStore : IBaselineStore, IDisposable
         EnsureColumn("baseline_run", "everyday_heat_json", "TEXT");
         EnsureColumn("baseline_run", "low_heat_json", "TEXT");
         EnsureColumn("baseline_run", "hot_heat_json", "TEXT");
+        EnsureColumn("baseline_run", "anchors_json", "TEXT");
     }
 
     private void EnsureColumn(string table, string column, string sqlType)
@@ -230,7 +232,7 @@ public sealed class SqliteBaselineStore : IBaselineStore, IDisposable
         runCommand.CommandText =
             """
             SELECT started_utc, finished_utc, status, abort_detail, ambient_celsius, gpu_load_available,
-                   everyday_heat_json, low_heat_json, hot_heat_json
+                   everyday_heat_json, low_heat_json, hot_heat_json, anchors_json
             FROM baseline_run WHERE id = $id;
             """;
         runCommand.Parameters.AddWithValue("$id", idText);
@@ -249,6 +251,7 @@ public sealed class SqliteBaselineStore : IBaselineStore, IDisposable
         HeatProfile? everyday = ReadHeat(runReader, 6);
         HeatProfile? low = ReadHeat(runReader, 7);
         HeatProfile? hot = runReader.FieldCount > 8 ? ReadHeat(runReader, 8) : null;
+        IReadOnlyList<HeatAnchor> anchors = ReadAnchors(runReader);
         runReader.Close();
 
         var samples = new List<BaselineSample>();
@@ -307,7 +310,21 @@ public sealed class SqliteBaselineStore : IBaselineStore, IDisposable
             metrics,
             everyday,
             low,
-            hot);
+            hot,
+            anchors);
+    }
+
+    private static object ToAnchorsJson(IReadOnlyList<HeatAnchor> anchors) =>
+        anchors.Count == 0 ? DBNull.Value : JsonSerializer.Serialize(anchors, JsonOptions);
+
+    private static IReadOnlyList<HeatAnchor> ReadAnchors(SqliteDataReader reader)
+    {
+        if (reader.FieldCount <= 9 || reader.IsDBNull(9))
+        {
+            return [];
+        }
+
+        return JsonSerializer.Deserialize<List<HeatAnchor>>(reader.GetString(9), JsonOptions) ?? [];
     }
 
     private static object ToHeatJson(HeatProfile? profile) =>

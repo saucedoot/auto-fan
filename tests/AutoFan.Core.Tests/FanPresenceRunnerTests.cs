@@ -62,7 +62,7 @@ public sealed class FanPresenceRunnerTests
     }
 
     [Fact]
-    public async Task Run_writes_nvidia_gpu_fans_once_and_marks_each_by_rpm()
+    public async Task Run_writes_one_nvidia_card_and_marks_each_fan_by_rpm()
     {
         var inner = new FakeHardwareBackend();
         inner.AddFan(
@@ -95,8 +95,8 @@ public sealed class FanPresenceRunnerTests
         Assert.Contains(FakeHardwareBackend.GpuFanId, report.ConnectedIds);
         Assert.Contains("gpu-fan-2", report.ConnectedIds);
         Assert.Contains("gpu-fan-3", report.ConnectedIds);
-        Assert.Single(hardware.Events, item => item.StartsWith("write:gpu-fan", StringComparison.Ordinal));
         Assert.Contains(hardware.Events, item => item == $"write:{FakeHardwareBackend.GpuFanId}:100");
+        Assert.Contains(hardware.Events, item => item == $"write:{FakeHardwareBackend.GpuFanId}:15");
         Assert.DoesNotContain(hardware.Events, item => item.StartsWith("write:gpu-fan-2", StringComparison.Ordinal));
         Assert.DoesNotContain(hardware.Events, item => item.StartsWith("write:gpu-fan-3", StringComparison.Ordinal));
     }
